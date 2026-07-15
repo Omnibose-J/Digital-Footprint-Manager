@@ -91,6 +91,28 @@ describe("analytics never carries anything read out of the mailbox", () => {
     assert.equal(window.dataLayer.length, 0);
   });
 
+  it("debug_mode is on for localhost and OFF everywhere else", async () => {
+    // debug_mode on production tags real users' traffic as debug, which routes it into DebugView
+    // and distorts the very reports it exists to verify. The default must be off, so the assertion
+    // that matters is the production one.
+    const configFor = async (hostname) => {
+      delete globalThis.window;
+      delete globalThis.document;
+      globalThis.window = { dataLayer: [] };
+      globalThis.document = { createElement: () => ({}), head: { appendChild() {} } };
+      globalThis.location = { hostname };
+      const mod = await import(`../frontend/analytics.js?t=${Math.random()}`);
+      mod.initAnalytics("G-TEST");
+      return window.dataLayer.map((a) => Array.from(a)).find((a) => a[0] === "config")[2];
+    };
+
+    assert.equal((await configFor("localhost")).debug_mode, true);
+    assert.equal((await configFor("127.0.0.1")).debug_mode, true);
+    assert.equal((await configFor("dfm-prototype.vercel.app")).debug_mode, undefined);
+    assert.equal((await configFor("localhost.evil.com")).debug_mode, undefined);
+    delete globalThis.location;
+  });
+
   it("turns off ad signals and personalisation", async () => {
     const { events } = await loadAnalytics();
     const config = window.dataLayer.map((a) => Array.from(a)).find((a) => a[0] === "config");

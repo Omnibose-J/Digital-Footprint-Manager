@@ -72,6 +72,22 @@ function gtag() {
 }
 
 /**
+ * DebugView is the only GA surface that shows an event WITH its parameters as it arrives. Realtime
+ * shows event names and counts; the reports need custom definitions registered and lag a day. So
+ * without this there is no way to prove an event reaches Google carrying the values the code meant
+ * to send, only that something called track().
+ *
+ * Localhost only, and deliberately not a config flag. debug_mode on production tags real users'
+ * traffic as debug, which routes it into DebugView and distorts the reports it is supposed to
+ * verify. The one place we need to watch our own clicks is the one place we are the only user.
+ */
+function isDebugHost() {
+  if (typeof location === "undefined") return false;
+  const h = location.hostname;
+  return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
+}
+
+/**
  * @param {string} measurementId e.g. G-0XB4PRBS82, served by /api/config
  */
 export function initAnalytics(measurementId) {
@@ -89,6 +105,7 @@ export function initAnalytics(measurementId) {
     allow_google_signals: false,
     allow_ad_personalization_signals: false,
     anonymize_ip: true,
+    ...(isDebugHost() ? { debug_mode: true } : {}),
   });
   ready = true;
 }
