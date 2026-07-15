@@ -26,7 +26,14 @@ function parseCookies(req) {
   for (const part of raw.split(";")) {
     const [k, ...rest] = part.trim().split("=");
     if (!k) continue;
-    out[k] = decodeURIComponent(rest.join("=") || "");
+    try {
+      out[k] = decodeURIComponent(rest.join("=") || "");
+    } catch {
+      // Malformed percent-encoding. Cookies are attacker-supplied, and this decodes every
+      // cookie on the domain, not just ours -- one bad value must not take the request down.
+      // A value that is not valid encoding is not a usable token either, so skipping it
+      // lands on the same answer as a wrong token: not signed in.
+    }
   }
   return out;
 }
