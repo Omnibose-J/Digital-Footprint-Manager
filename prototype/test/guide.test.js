@@ -185,3 +185,60 @@ describe("identity_verification reaches the screen", () => {
     assert.match(html, /&lt;img/);
   });
 });
+
+describe("the guide leads with what is specific to this service", () => {
+  const candidate = { displayName: "토스", registrableDomain: "toss.im", linkSafety: "verified" };
+  const entry = {
+    display_name: "토스",
+    deletion_route: "self_service",
+    url: "https://support.toss.im/faq/218",
+    steps: ["설정 > 탈퇴하기"],
+    prerequisites: ["토스머니와 토스포인트 잔액이 0원이어야 합니다.", "토스증권, 토스뱅크 계좌는 별도로 해지해야 합니다."],
+    last_verified_at: "2026-07-15",
+  };
+  const render = (over = {}) =>
+    renderGuideHtml({
+      candidate,
+      entry: { ...entry, ...over },
+      stale: false,
+      serviceName: "토스",
+      maskedAccount: "so****@gmail.com",
+    });
+
+  it("prerequisites get their own block above the route, not a bullet under the steps", () => {
+    const html = render();
+    assert.match(html, /<h3>먼저 확인하세요<\/h3>/);
+    assert.match(html, /토스머니와 토스포인트 잔액이 0원이어야 합니다/);
+    // Above: this is what the user needs before they click, not after.
+    assert.ok(html.indexOf("먼저 확인하세요") < html.indexOf("탈퇴 경로"));
+  });
+
+  it("the generic advice is folded SHUT, because it is identical for all 46 services", () => {
+    const html = render();
+    // Present, so nothing is lost, but closed: open, five checklist bullets and five warnings
+    // outweighed the four lines that are actually about closing this account.
+    assert.match(html, /<summary>모든 서비스에 해당하는 일반 안내<\/summary>/);
+    assert.match(html, /비활성화가 곧 삭제는 아닙니다/);
+
+    const generic = html.slice(html.indexOf('<details class="guide-fold"'));
+    const opensGeneric = /<details class="guide-fold" open>[\s\S]*?모든 서비스에 해당하는/.test(html);
+    assert.equal(opensGeneric, false, "the generic block must start closed");
+    assert.ok(generic.includes("비활성화가 곧 삭제는 아닙니다"));
+  });
+
+  it("a service with no prerequisites renders no empty block", () => {
+    const html = render({ prerequisites: [] });
+    assert.doesNotMatch(html, /먼저 확인하세요/);
+  });
+
+  it("the template opens only where sending it IS the withdrawal", () => {
+    assert.doesNotMatch(render(), /<details class="guide-fold" open>[\s\S]*요청문/);
+    assert.match(render({ deletion_route: "email_request" }), /<details class="guide-fold" open>/);
+  });
+
+  it("prerequisites are escaped, not injected", () => {
+    const html = render({ prerequisites: ["<img src=x onerror=alert(1)>"] });
+    assert.doesNotMatch(html, /<img src=x/);
+    assert.match(html, /&lt;img/);
+  });
+});

@@ -63,11 +63,29 @@ function safetyBadge(candidate, entry, stale) {
   return `<span class="guide-badge guide-badge-unchecked">공식 탈퇴 경로 미확인</span>`;
 }
 
+/**
+ * The service-specific warnings, on their own and first.
+ *
+ * These used to sit inside the route block, below the steps, in the same bullet style as the five
+ * generic reminders that follow every service. So "토스머니 잔액이 0원이어야 합니다" and "앱을
+ * 지워도 계정은 삭제되지 않습니다" looked identical, and one of them was read against 토스's own
+ * documentation this week while the other is true of everything. This is the single most useful
+ * thing the catalog knows, and it belongs above the button, not under it.
+ */
+function prereqBlockHtml(entry) {
+  const items = entry?.prerequisites || [];
+  if (!items.length) return "";
+  return `<section class="guide-section guide-prereq">
+      <h3>먼저 확인하세요</h3>
+      <ul>${items.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ul>
+    </section>`;
+}
+
 function routeBlockHtml(entry) {
   if (!entry) {
     return `<section class="guide-section">
       <h3>탈퇴 경로</h3>
-      <p><strong>공식 탈퇴 경로 미확인.</strong> 이 서비스는 아직 카탈로그에서 검증하지 않았습니다. 아래 체크리스트·주의사항·요청 템플릿을 사용해 공식 경로를 직접 확인하세요.</p>
+      <p><strong>공식 탈퇴 경로 미확인.</strong> 이 서비스는 아직 확인하지 못했습니다. 아래 일반 체크리스트와 요청 템플릿으로 공식 경로를 직접 찾아 진행하세요.</p>
     </section>`;
   }
 
@@ -76,9 +94,9 @@ function routeBlockHtml(entry) {
   const steps = (entry.steps || [])
     .map((s) => `<li>${escapeHtml(s)}</li>`)
     .join("");
-  const prereq = (entry.prerequisites || [])
-    .map((s) => `<li>${escapeHtml(s)}</li>`)
-    .join("");
+  // Prerequisites now render above, in their own block. Kept empty here so the branches below
+  // that still interpolate it stay honest rather than duplicating the section.
+  const prereq = "";
 
   if (route === "unavailable") {
     return `<section class="guide-section">
@@ -164,27 +182,31 @@ export function renderGuideHtml({
       ? `<p class="guide-stale-note">이 안내의 검토 기한이 지났습니다 (last_verified_at: ${verifiedAt}). 링크는 보여 드리지만 최신으로 단정하지 마세요.</p>`
       : "";
 
+  // The template is the whole point of an email_request route and a footnote everywhere else, so it
+  // only opens by default where sending it IS the withdrawal.
+  const templateIsTheRoute = entry?.deletion_route === "email_request" || !entry;
+
   return `
     <div class="guide-header">
       <h2 id="guideTitle">${name}</h2>
       <p class="guide-meta">${domain} · ${safetyBadge(candidate, entry, stale)} · 확인일 ${verifiedAt}</p>
       ${staleNote}
     </div>
+    ${prereqBlockHtml(entry)}
     ${routeBlockHtml(entry)}
     ${identity}
-    <section class="guide-section">
-      <h3>탈퇴 전 체크리스트</h3>
-      <ul>${checklist}</ul>
-    </section>
-    <section class="guide-section">
-      <h3>구분 주의</h3>
-      <ul>${warnings}</ul>
-    </section>
-    <section class="guide-section">
-      <h3>한국어 요청 템플릿</h3>
+    <details class="guide-fold"${templateIsTheRoute ? " open" : ""}>
+      <summary>개인정보 삭제 요청문 (복사해서 보내세요)</summary>
       <pre class="guide-template" id="guideTemplateText">${escapeHtml(template.fullText)}</pre>
-      <button type="button" id="guideCopyBtn">템플릿 복사</button>
-    </section>
+      <button type="button" id="guideCopyBtn" class="btn btn-quiet">템플릿 복사</button>
+    </details>
+    <details class="guide-fold">
+      <summary>모든 서비스에 해당하는 일반 안내</summary>
+      <h4>탈퇴 전 확인할 것</h4>
+      <ul>${checklist}</ul>
+      <h4>이건 탈퇴가 아닙니다</h4>
+      <ul>${warnings}</ul>
+    </details>
   `;
 }
 

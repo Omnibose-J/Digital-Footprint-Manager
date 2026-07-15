@@ -866,6 +866,66 @@ tr.row-closed td {
   margin: var(--s5) 0;
 }
 
+/* The one block that was read against this service's own documentation. Everything else in the
+   modal is either a link or true of all 46, so this is the part that earns a container. */
+.guide-prereq {
+  background: var(--surface);
+  border: 1px solid var(--hairline-faint);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-chip);
+  padding: var(--s4) var(--s5);
+}
+
+.guide-prereq h3 {
+  color: var(--accent);
+}
+
+.guide-prereq li {
+  color: var(--ink);
+}
+
+/* Folded, because it is identical for every service. Open by default it competed for attention
+   with the four lines that are actually about the account being closed. */
+.guide-fold {
+  margin: var(--s5) 0;
+  border-top: 1px solid var(--hairline-soft);
+  padding-top: var(--s4);
+}
+
+.guide-fold > summary {
+  cursor: pointer;
+  color: var(--accent-text);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  list-style-position: outside;
+}
+
+.guide-fold > summary:hover {
+  text-decoration: underline;
+}
+
+.guide-fold h4 {
+  margin: var(--s4) 0 var(--s2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-deep);
+}
+
+.guide-fold ul {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--ink-quiet);
+  font-size: var(--text-sm);
+}
+
+.guide-fold li {
+  margin-bottom: var(--s2);
+}
+
+.guide-fold .btn {
+  margin-top: var(--s3);
+}
+
 .guide-section h3 {
   margin: 0 0 var(--s2);
   font-size: var(--text-body);
