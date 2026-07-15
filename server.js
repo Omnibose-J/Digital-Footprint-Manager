@@ -292,6 +292,39 @@ async function fetchMessage(session, id) {
   return apiFetch(session, `users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`);
 }
 
+function extractEmailAddress(fromHeader = "") {
+  const match = fromHeader.match(/<([^>]+)>/) || fromHeader.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
+  return match ? match[1].trim().toLowerCase() : "";
+}
+
+function extractDomain(fromHeader = "") {
+  const email = extractEmailAddress(fromHeader);
+  if (!email) return "";
+  return email.split("@")[1] || "";
+}
+
+function hasListUnsubscribe(headers = []) {
+  return headers.some((h) => h.name.toLowerCase() === "list-unsubscribe" && String(h.value || "").trim().length > 0);
+}
+
+function normalizeServiceKey({ domain = "", from = "", subject = "", hasUnsubscribe = false }) {
+  const cleanedDomain = domain
+    .replace(/^mail\./, "")
+    .replace(/^m\./, "")
+    .replace(/^notifications\./, "")
+    .replace(/^noreply\./, "");
+  const subjectSeed = subject
+    .replace(/[^A-Za-z0-9 ]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)[0]?.toLowerCase() || "";
+  const fromSeed = extractEmailAddress(from).split("@")[0].replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+  return [
+    cleanedDomain || fromSeed || subjectSeed || "unknown",
+    hasUnsubscribe ? "unsubscribe" : "no-unsubscribe",
+  ].join("::");
+}
+
 async function findServices(session, extraQueries = []) {
   const candidates = new Map();
   const queries = [...new Set([...extraQueries, ...COMMON_QUERIES])];
@@ -303,28 +336,40 @@ async function findServices(session, extraQueries = []) {
       const from = headers.find((h) => h.name === "From")?.value || "";
       const subject = headers.find((h) => h.name === "Subject")?.value || "";
       const date = headers.find((h) => h.name === "Date")?.value || "";
-      const snippet = detail.snippet || "";
-      const bodyText = snippet;
-      const service = normalizeServiceName(from, subject, bodyText).toLowerCase();
-      if (!candidates.has(service)) {
-        candidates.set(service, {
-          service,
+      const domain = extractDomain(from);
+      const unsubscribe = hasListUnsubscribe(headers);
+      const serviceKey = normalizeServiceKey({ domain, from, subject, hasUnsubscribe: unsubscribe });
+      const label = domain || extractEmailAddress(from).split("@")[0] || subject || "unknown";
+      if (!candidates.has(serviceKey)) {
+        candidates.set(serviceKey, {
+          service: label.toLowerCase(),
+          domain,
           from,
           subject,
           firstSeen: date,
           lastSeen: date,
           evidence: 1,
+          listUnsubscribe: unsubscribe,
+          listUnsubscribeCount: unsubscribe ? 1 : 0,
+          sourceTypes: [unsubscribe ? "unsubscribe-header" : "sender-domain"],
           status: "maybe_unused",
         });
       } else {
-        const item = candidates.get(service);
+        const item = candidates.get(serviceKey);
         item.evidence += 1;
         item.lastSeen = date;
         item.subject = item.subject || subject;
+        item.listUnsubscribeCount += unsubscribe ? 1 : 0;
       }
     }
   }
-  return [...candidates.values()].sort((a, b) => b.evidence - a.evidence);
+  return [...candidates.values()]
+    .map((item) => ({
+      ...item,
+      status: item.listUnsubscribe ? "candidate_delete" : item.evidence >= 3 ? "active" : "maybe_unused",
+      confidence: item.listUnsubscribe ? "high" : item.evidence >= 2 ? "medium" : "low",
+    }))
+    .sort((a, b) => b.evidence - a.evidence);
 }
 
 function homePage(session) {
@@ -381,10 +426,11 @@ function dashboardPage(session, services = [], error = "") {
     const first = s.firstSeen ? new Date(s.firstSeen).toLocaleDateString("ko-KR") : "-";
     const pillClass = s.evidence >= 3 ? "active" : s.evidence >= 2 ? "stale" : "delete";
     return `<tr>
-      <td><strong>${escapeHtml(s.service)}</strong><div class="muted">${escapeHtml(s.from)}</div></td>
+      <td><strong>${escapeHtml(s.service)}</strong><div class="muted">${escapeHtml(s.domain || s.from)}</div></td>
       <td>${escapeHtml(first)}</td>
       <td>${escapeHtml(last)}</td>
       <td><span class="pill ${pillClass}">${escapeHtml(s.evidence)}건</span></td>
+      <td>${s.listUnsubscribe ? '<span class="pill active">List-Unsubscribe</span>' : '<span class="pill delete">없음</span>'}</td>
       <td>${escapeHtml(s.status)}</td>
     </tr>`;
   }).join("");
@@ -398,16 +444,21 @@ function dashboardPage(session, services = [], error = "") {
             <p class="muted">${escapeHtml(session.email || "")}</p>
           </div>
           <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            <form method="post" action="/api/analyze"><button class="btn buy" type="submit">다시 분석</button></form>
+            <button class="btn buy" type="button" id="run-analysis">다시 분석</button>
             <a class="btn secondary" href="/logout">로그아웃</a>
           </div>
         </div>
+        <div id="analysis-state" class="muted" style="margin: 8px 0 0;">${list.length ? "분석이 완료되었습니다." : "대시보드를 불러왔습니다. 분석을 시작하세요."}</div>
         ${error ? `<p style="color:#e41e3f;">${escapeHtml(error)}</p>` : ""}
-        <form method="post" action="/api/analyze" style="margin-top:16px;">
+        <form method="post" action="/api/analyze" id="analysis-form" style="margin-top:16px; display:none;">
           <label class="muted">Gmail 검색 보조어</label>
           <input type="text" name="query" placeholder="예: welcome, verify, confirm" />
           <p class="muted">비워두면 기본 패턴으로 분석합니다.</p>
         </form>
+        <div class="statline">
+          <div class="stat"><strong>${list.filter((s) => s.listUnsubscribe).length}</strong><span class="muted">List-Unsubscribe 감지</span></div>
+          <div class="stat"><strong>${list.length}</strong><span class="muted">클러스터된 서비스</span></div>
+        </div>
       </div>
       <div class="grid">
         <div class="card">
@@ -423,12 +474,30 @@ function dashboardPage(session, services = [], error = "") {
       </div>
       <div class="card" style="margin-top:16px; overflow:auto;">
         <table>
-          <thead><tr><th>서비스</th><th>첫 흔적</th><th>최근 흔적</th><th>증거</th><th>상태</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="5">아직 분석 결과가 없습니다. 분석 버튼을 눌러주세요.</td></tr>`}</tbody>
+          <thead><tr><th>서비스</th><th>첫 흔적</th><th>최근 흔적</th><th>증거</th><th>구독 헤더</th><th>상태</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="6">아직 분석 결과가 없습니다. 분석 버튼을 눌러주세요.</td></tr>`}</tbody>
         </table>
       </div>
       <div class="footer muted">원하시면 여기서 바로 탈퇴 링크, 보호 서비스 설정, CSV 내보내기도 붙일 수 있습니다.</div>
     </div>
+    <script>
+      const btn = document.getElementById('run-analysis');
+      const state = document.getElementById('analysis-state');
+      const form = document.getElementById('analysis-form');
+      btn?.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = '분석 중...';
+        state.textContent = 'Gmail에서 가입 흔적을 찾는 중입니다. 잠시만 기다려주세요.';
+        try {
+          await fetch('/api/analyze', { method: 'POST' });
+          window.location.reload();
+        } catch (err) {
+          state.textContent = '분석에 실패했습니다. 다시 시도해 주세요.';
+          btn.disabled = false;
+          btn.textContent = '다시 분석';
+        }
+      });
+    </script>
   `);
 }
 
@@ -489,7 +558,15 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/dashboard") {
       if (!session?.access_token) return redirect(res, "/");
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.end(dashboardPage(session));
+      if (!session.services) {
+        try {
+          session.services = await findServices(session);
+        } catch (error) {
+          res.end(dashboardPage(session, [], error.message || "분석에 실패했습니다."));
+          return;
+        }
+      }
+      res.end(dashboardPage(session, session.services));
       return;
     }
 
@@ -504,6 +581,12 @@ const server = http.createServer(async (req, res) => {
       const extraQueries = query ? [`subject:(${query})`] : [];
       const services = await findServices(session, extraQueries);
       session.services = services;
+      const isFetch = req.headers.accept?.includes("application/json") || req.headers["x-requested-with"] === "fetch";
+      if (isFetch || req.headers["sec-fetch-mode"] === "cors") {
+        res.statusCode = 204;
+        res.end();
+        return;
+      }
       redirect(res, "/dashboard");
       return;
     }
