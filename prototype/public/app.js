@@ -241,6 +241,29 @@ function renderGoogleButton() {
     shape: "rectangular",
     width: 280,
   });
+  reportIfButtonMissing();
+}
+
+/**
+ * An unregistered origin is reported by GSI only to the devtools console; the container
+ * is simply left empty. Without this the page shows a blank space and reads as "broken app"
+ * — which is what it looked like to everyone who tried to run this.
+ */
+function reportIfButtonMissing() {
+  setTimeout(() => {
+    if (googleBtn.querySelector("iframe")) return;
+    loginStatus.innerHTML = `
+      <p style="color:#b00020"><strong>로그인 버튼을 불러오지 못했습니다.</strong></p>
+      <p class="note">
+        이 주소가 Google OAuth 클라이언트의 <strong>승인된 JavaScript 원본</strong>에 등록되어 있지 않습니다:<br />
+        <code>${escapeHtml(window.location.origin)}</code>
+      </p>
+      <p class="note">
+        Google Cloud Console → API 및 서비스 → 사용자 인증 정보에서 클라이언트
+        <code>${escapeHtml(String(config?.clientId || "").split("-")[0])}</code> 를 열고
+        위 주소를 추가한 뒤 이 페이지를 새로고침하세요. 반영에 몇 분 걸릴 수 있습니다.
+      </p>`;
+  }, 2500);
 }
 
 function requestGmailToken() {
