@@ -4,9 +4,10 @@
  * Pure by design, and separate from app.js on purpose: every progress tick replaces the snapshot,
  * so this has to re-run on each render, and it has to be testable without a DOM.
  *
- * PRODUCT_SPEC §3 also defines owned and unsure. They are not here: nothing consumes them
- * yet. The cleanup list they feed (§4) does not exist, so they only ever set a badge.
- * Bring them back with that list, not before.
+ * PRODUCT_SPEC §3 defines four: owned, unsure, not_mine, and the restore back to candidate. Only
+ * the restore is here. The other three each set a badge and feed a cleanup list (§4) that does
+ * not exist, so they were controls arriving ahead of the thing they serve. Bring them back with
+ * that list, not before.
  */
 
 /** Score desc, then messageCount desc — single shared comparator (SOW 005 R9). */
@@ -32,7 +33,7 @@ function sortBuckets(snapshot) {
 
 /**
  * @param {any} snapshot aggregator snapshot
- * @param {Map<string, 'not_mine'|'candidate'>} verdicts keyed by ServiceCandidate.key
+ * @param {Map<string, 'candidate'>} verdicts keyed by ServiceCandidate.key
  */
 export function applyUserVerdict(snapshot, verdicts) {
   if (!snapshot) return snapshot;
@@ -40,20 +41,9 @@ export function applyUserVerdict(snapshot, verdicts) {
     return sortBuckets(annotateDefaults(snapshot));
   }
 
-  let services = [...(snapshot.services || [])];
+  const services = [...(snapshot.services || [])];
   let hidden = [...(snapshot.hidden || [])];
   let unresolved = [...(snapshot.unresolved || [])];
-
-  services = services.filter((s) => {
-    if (verdicts.get(s.key) !== "not_mine") return true;
-    hidden.push({
-      ...s,
-      verdict: "hidden",
-      hiddenRule: "not_mine",
-      userStatus: "not_mine",
-    });
-    return false;
-  });
 
   // Link fields are left untouched: restoring says "this is a service", not "this URL is right".
   const pullToServices = (bucket) =>

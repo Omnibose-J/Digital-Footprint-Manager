@@ -49,7 +49,6 @@ const RULE_LABEL = {
   relay_domain: "메일 중계 도메인",
   personal_mailbox: "개인 메일함",
   payment_gateway: "결제대행사",
-  not_mine: "내 계정 아님",
 };
 
 let config = null;
@@ -59,8 +58,11 @@ let lastSnapshot = null;
  * key -> user's explicit verdict. Held outside the aggregator; re-applied on every render,
  * because each progress tick hands us a fresh snapshot that knows nothing about user input.
  * Session-only — a reload resets it (persistence needs the database, §8).
+ *
+ * Only 'candidate' is written now, by 복구 in the excluded bucket. The rule engine decides what
+ * is not a service; the user only overrules it in the direction of putting a row back.
  */
-const userVerdict = new Map(); // 'not_mine' | 'candidate'
+const userVerdict = new Map(); // 'candidate'
 
 const BAND_LABEL = {
   high: "높음",
@@ -116,12 +118,6 @@ function bandCell(s) {
   return `<span class="band band-${escapeHtml(band)}">${escapeHtml(BAND_LABEL[band] || band)} ${escapeHtml(String(score))}</span>${closed}<span class="score-why">${escapeHtml(expl)}</span>`;
 }
 
-function notMineCell(index) {
-  // The only user verdict with a consumer: it drops the row, and its rate inside the high
-  // band is the §7 precision gate. "내 계정" / "모르겠음" wait for the cleanup list (§4).
-  return `<button type="button" class="btn-row" data-not-mine="${index}">내 계정 아님</button>`;
-}
-
 function withCatalog(rawSnapshot) {
   const overridden = applyUserVerdict(rawSnapshot, userVerdict);
   if (!catalog) return overridden;
@@ -146,7 +142,6 @@ function renderSnapshot(rawSnapshot) {
           <td class="cell-month">${escapeHtml(s.lastSeenMonth || "—")}</td>
           <td class="col-count">${s.messageCount}</td>
           <td>${deletionCell(s, i)}</td>
-          <td>${notMineCell(i)}</td>
         </tr>`
     )
     .join("");
@@ -370,16 +365,6 @@ hiddenRows?.addEventListener("click", (ev) => {
 });
 
 rows?.addEventListener("click", (ev) => {
-  const notMineBtn = ev.target.closest("[data-not-mine]");
-  if (notMineBtn && lastSnapshot) {
-    const idx = Number(notMineBtn.getAttribute("data-not-mine"));
-    const item = lastSnapshot.services[idx];
-    if (!item?.key) return;
-    userVerdict.set(item.key, "not_mine");
-    renderSnapshot(lastSnapshot);
-    return;
-  }
-
   const btn = ev.target.closest("[data-guide]");
   if (!btn || !lastSnapshot) return;
   const idx = Number(btn.getAttribute("data-guide"));

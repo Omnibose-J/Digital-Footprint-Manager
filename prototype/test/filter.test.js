@@ -480,50 +480,61 @@ describe("SOW 003 R4 applyUserVerdict", () => {
       })
     );
     agg.add(msg({ from: "KCP <noreply@kcp.co.kr>", subject: "영수증" }));
+    // A person, not a service: hidden by personal_mailbox with linkBlockedBy set, which is the
+    // only shape where the link assertions below can actually vary. KCP is a payment gateway and
+    // still carries an inferred https://kcp.co.kr, so asserting its link proves nothing.
+    agg.add(msg({ from: "김철수 <chulsoo.kim@gmail.com>", subject: "안녕하세요" }));
     return agg.snapshot();
   }
 
-  it("not_mine moves candidate to excluded with reason 내 계정 아님", () => {
+  // Restore is the only user verdict left. not_mine was removed: it dropped a row and set a
+  // badge for a cleanup list (§4) that does not exist, so nothing consumed the drop.
+  it("복구 pulls a rule-hidden sender back into services", () => {
     const snap = seededSnapshot();
-    const target = snap.services.find((s) => s.registrableDomain === "brand-shop.com");
-    assert.ok(target);
-    const verdicts = new Map([[target.key, "not_mine"]]);
-    const out = applyUserVerdict(snap, verdicts);
-    assert.ok(!out.services.some((s) => s.key === target.key));
-    const excluded = out.hidden.find((s) => s.key === target.key);
-    assert.ok(excluded);
-    assert.equal(excluded.hiddenRule, "not_mine");
+    const target = snap.hidden.find((s) => s.registrableDomain === "kcp.co.kr");
+    assert.ok(target, "KCP should start hidden as a payment gateway");
+    assert.equal(target.hiddenRule, "payment_gateway");
+
+    const out = applyUserVerdict(snap, new Map([[target.key, "candidate"]]));
+    const restored = out.services.find((s) => s.key === target.key);
+    assert.ok(restored);
+    assert.equal(restored.hiddenRule, null);
+    assert.ok(!out.hidden.some((s) => s.key === target.key));
   });
 
-  it("candidate override round-trips not_mine back to services", () => {
-    const snap = seededSnapshot();
-    const key = snap.services.find((s) => s.registrableDomain === "brand-shop.com").key;
-    const mid = applyUserVerdict(snap, new Map([[key, "not_mine"]]));
-    const back = applyUserVerdict(mid, new Map([[key, "candidate"]]));
-    assert.ok(back.services.some((s) => s.key === key));
-    assert.ok(!back.hidden.some((s) => s.key === key));
-  });
-
-  it("not_mine survives a fresh snapshot (progress tick)", () => {
+  it("복구 survives a fresh snapshot (progress tick)", () => {
     const snap1 = seededSnapshot();
-    const key = snap1.services.find((s) => s.registrableDomain === "brand-shop.com").key;
-    const verdicts = new Map([[key, "not_mine"]]);
+    const key = snap1.hidden.find((s) => s.registrableDomain === "kcp.co.kr").key;
+    const verdicts = new Map([[key, "candidate"]]);
     applyUserVerdict(snap1, verdicts);
 
     const snap2 = seededSnapshot(); // fresh tick — aggregator knows nothing
     const out = applyUserVerdict(snap2, verdicts);
-    assert.ok(!out.services.some((s) => s.key === key));
-    assert.ok(out.hidden.some((s) => s.key === key && s.hiddenRule === "not_mine"));
+    assert.ok(out.services.some((s) => s.key === key));
+    assert.ok(!out.hidden.some((s) => s.key === key));
   });
 
-  it("save payload omits not_mine domains", () => {
+  it("restoring says 'this is a service', not 'this URL is right'", () => {
+    // A rescued gmail.com sender still has no site to send anyone to. Handing them
+    // https://gmail.com as a withdrawal page would be worse than showing nothing.
     const snap = seededSnapshot();
-    const target = snap.services.find((s) => s.registrableDomain === "brand-shop.com");
-    const out = applyUserVerdict(snap, new Map([[target.key, "not_mine"]]));
-    const domains = out.services
-      .filter((s) => s.registrableDomain)
-      .map((s) => s.registrableDomain);
-    assert.ok(!domains.includes("brand-shop.com"));
+    const target = snap.hidden.find((s) => s.hiddenRule === "personal_mailbox");
+    assert.ok(target);
+    assert.equal(target.linkBlockedBy, "free_mailbox");
+    assert.equal(target.siteUrl, null);
+
+    const out = applyUserVerdict(snap, new Map([[target.key, "candidate"]]));
+    const restored = out.services.find((s) => s.key === target.key);
+    assert.ok(restored, "the rescue itself must work");
+    assert.equal(restored.siteUrl, null);
+    assert.equal(restored.linkBlockedBy, "free_mailbox");
+  });
+
+  it("an empty verdict map leaves every bucket where the rules put it", () => {
+    const snap = seededSnapshot();
+    const out = applyUserVerdict(snap, new Map());
+    assert.equal(out.services.length, snap.services.length);
+    assert.equal(out.hidden.length, snap.hidden.length);
   });
 });
 
