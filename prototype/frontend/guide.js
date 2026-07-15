@@ -67,7 +67,7 @@ function routeBlockHtml(entry) {
   if (!entry) {
     return `<section class="guide-section">
       <h3>탈퇴 경로</h3>
-      <p><strong>공식 탈퇴 경로 미확인</strong> — 이 서비스는 아직 카탈로그에서 검증하지 않았습니다. 아래 체크리스트·주의사항·요청 템플릿을 사용해 공식 경로를 직접 확인하세요.</p>
+      <p><strong>공식 탈퇴 경로 미확인.</strong> 이 서비스는 아직 카탈로그에서 검증하지 않았습니다. 아래 체크리스트·주의사항·요청 템플릿을 사용해 공식 경로를 직접 확인하세요.</p>
     </section>`;
   }
 
@@ -82,7 +82,7 @@ function routeBlockHtml(entry) {
 
   if (route === "unavailable") {
     return `<section class="guide-section">
-      <h3>탈퇴 경로 — 공식 경로 없음(검증됨)</h3>
+      <h3>탈퇴 경로: 공식 경로 없음(검증됨)</h3>
       <p>${escapeHtml(entry.grace_period || "공식 자가 탈퇴 경로가 확인되지 않았습니다.")}</p>
       <p>안전한 대안: 데이터 최소화, 계정 비활성화(가능한 경우), 공식 고객지원 에스컬레이션.</p>
       ${prereq ? `<ul>${prereq}</ul>` : ""}
@@ -92,7 +92,7 @@ function routeBlockHtml(entry) {
 
   if (route === "public_service") {
     return `<section class="guide-section">
-      <h3>탈퇴 경로 — 정보주체 권리행사</h3>
+      <h3>탈퇴 경로: 정보주체 권리행사</h3>
       <p>한국 공공 레일(privacy.go.kr)로 본인확인 이력이 있는 사이트 탈퇴를 신청합니다. eprivacy.go.kr를 진입점으로 쓰지 마세요.</p>
       <p><a href="${url}" target="_blank" rel="noopener noreferrer">웹사이트 회원 탈퇴 신청</a></p>
       ${steps ? `<ol>${steps}</ol>` : ""}
@@ -102,7 +102,7 @@ function routeBlockHtml(entry) {
 
   if (route === "email_request") {
     return `<section class="guide-section">
-      <h3>탈퇴 경로 — 이메일 요청</h3>
+      <h3>탈퇴 경로: 이메일 요청</h3>
       <p>아래 한국어 템플릿을 검토한 뒤 본인 메일 클라이언트에서 발송하세요. 자동 발송하지 않습니다.</p>
       ${entry.url ? `<p>안내: <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a></p>` : ""}
       ${prereq ? `<ul>${prereq}</ul>` : ""}
@@ -111,7 +111,7 @@ function routeBlockHtml(entry) {
 
   if (route === "contact_form") {
     return `<section class="guide-section">
-      <h3>탈퇴 경로 — 공식 양식</h3>
+      <h3>탈퇴 경로: 공식 양식</h3>
       <p><a href="${url}" target="_blank" rel="noopener noreferrer">공식 문의/신청 양식</a></p>
       ${prereq ? `<p>준비 사항</p><ul>${prereq}</ul>` : ""}
       ${steps ? `<ol>${steps}</ol>` : ""}
@@ -120,7 +120,7 @@ function routeBlockHtml(entry) {
 
   // self_service default
   return `<section class="guide-section">
-    <h3>탈퇴 경로 — 자가 탈퇴</h3>
+    <h3>탈퇴 경로: 자가 탈퇴</h3>
     <p><a href="${url}" target="_blank" rel="noopener noreferrer">공식 탈퇴/삭제 페이지</a></p>
     ${entry.grace_period ? `<p>유예: ${escapeHtml(entry.grace_period)}</p>` : ""}
     ${steps ? `<ol>${steps}</ol>` : ""}
