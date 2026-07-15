@@ -168,11 +168,18 @@ test.describe("the scan a user actually sees", () => {
     await expect(modal).toBeVisible();
     await expect(modal).toContainText("Spotify");
     await expect(modal).toContainText("탈퇴 경로");
-    await expect(modal).toContainText("탈퇴 전 체크리스트");
-    // The warning the whole product exists to make: deactivate is not deletion.
-    await expect(modal).toContainText("비활성화가 곧 삭제는 아닙니다");
     // Verified, not inferred: this domain is in the catalog and was read against its source.
     await expect(modal).toContainText("verified");
+
+    // Spotify's own facts lead, above the route. This is the reason the modal exists.
+    await expect(modal.locator(".guide-prereq")).toContainText("Premium만 끊으려면");
+
+    // The advice that is identical for all 46 is present but folded shut, so it cannot outweigh
+    // the four lines that are actually about closing this account.
+    const generic = modal.locator("details", { hasText: "모든 서비스에 해당하는" });
+    await expect(generic).not.toHaveAttribute("open", /.*/);
+    await generic.locator("summary").click();
+    await expect(generic).toContainText("비활성화가 곧 삭제는 아닙니다");
 
     await page.click("#guideClose");
     await expect(modal).toBeHidden();
