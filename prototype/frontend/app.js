@@ -340,7 +340,10 @@ function openGuide(candidate, trigger) {
     try {
       await navigator.clipboard.writeText(tpl.fullText);
       // The strongest signal a guide was actually used. Still says nothing about which service.
-      track("template_copied", { catalogued: Boolean(entry) });
+      // catalogued is gone for the same reason it left guide_opened: openGuide returns early
+      // without an entry, so Boolean(entry) was always true and the parameter measured nothing.
+      // route is the useful cut, since copying matters most where sending it IS the withdrawal.
+      track("template_copied", { route: entry.deletion_route || "none" });
       copyBtn.textContent = "복사됨";
       setTimeout(() => {
         copyBtn.textContent = "템플릿 복사";

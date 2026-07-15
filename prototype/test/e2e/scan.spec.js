@@ -201,6 +201,38 @@ test.describe("the scan a user actually sees", () => {
     await expect(modal).toBeHidden();
   });
 
+  test("the 탈퇴 button reports the open, and the copy reports the use", async ({ page }) => {
+    // guide_opened predates today and had only ever been driven by a fake window in the unit
+    // tests. Nothing had checked that clicking the actual button in an actual browser fires it.
+    await runScan(page);
+    const events = () =>
+      page.evaluate(() =>
+        (window.dataLayer || [])
+          .map((a) => Array.from(a))
+          .filter((a) => a[0] === "event")
+          .map((a) => ({ name: a[1], params: a[2] }))
+      );
+
+    await page.locator("#rows tr", { hasText: "spotify.com" }).getByRole("button").click();
+    const opened = (await events()).filter((e) => e.name === "guide_opened");
+    expect(opened).toEqual([
+      { name: "guide_opened", params: { band: "high", route: "self_service", stale: false } },
+    ]);
+
+    // Chromium withholds clipboard access from an automated context, so the copy lands in the
+    // catch and reports 복사 실패. A real browser on localhost or https grants it on a user
+    // gesture; this is the harness lacking a permission, not the product failing to copy.
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+
+    // catalogued is deliberately absent from both: every guide that opens is catalogued now, so
+    // the parameter had one value. Asserting the exact object is what catches it coming back.
+    await page.locator("summary", { hasText: "개인정보 삭제 요청문" }).click();
+    await page.click("#guideCopyBtn");
+    await expect(page.locator("#guideCopyBtn")).toHaveText("복사됨");
+    const copied = (await events()).filter((e) => e.name === "template_copied");
+    expect(copied).toEqual([{ name: "template_copied", params: { route: "self_service" } }]);
+  });
+
   test("following the route to the official page is counted, without the URL", async ({ page }) => {
     // The withdrawal happens on Spotify's site, where this product cannot follow. Clicking through
     // is the last thing it can observe, so it is the only real conversion signal there is.
