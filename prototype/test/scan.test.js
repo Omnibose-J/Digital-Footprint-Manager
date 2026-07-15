@@ -6,9 +6,9 @@ import {
   isRateLimitReason,
   shouldRetryGmail,
   collectSenders,
-} from "../public/scan.js";
-import { authVerdict } from "../public/authenticity.js";
-import { createAggregator } from "../public/filter.js";
+} from "../frontend/scan.js";
+import { authVerdict } from "../frontend/authenticity.js";
+import { createAggregator } from "../frontend/filter.js";
 
 /**
  * Stub Gmail so collectSenders can be driven end to end. `perMessage` decides what each

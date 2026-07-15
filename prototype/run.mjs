@@ -120,7 +120,7 @@ async function main() {
 
   // 4. Server.
   console.log(`Starting the server on ${url} ...\n`);
-  const child = spawn("node", ["src/server.js"], { cwd: root, stdio: "inherit" });
+  const child = spawn("node", ["backend/server.js"], { cwd: root, stdio: "inherit" });
 
   const shutdown = () => {
     if (child.exitCode === null) child.kill();

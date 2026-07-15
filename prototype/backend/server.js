@@ -5,10 +5,10 @@ import { fileURLToPath } from "node:url";
 import { OAuth2Client } from "google-auth-library";
 // One DNS rule, one place. filter.js is plain ESM with no browser API, and a second copy
 // here would drift from the one the scan actually validates against.
-import { isValidDnsHost } from "../public/filter.js";
+import { isValidDnsHost } from "../frontend/filter.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const publicDir = path.resolve(__dirname, "..", "public");
+const publicDir = path.resolve(__dirname, "..", "frontend");
 const port = Number(process.env.PORT || 3456);
 const clientId = process.env.GOOGLE_CLIENT_ID || "";
 const concurrency = Number(process.env.GMAIL_CONCURRENCY || 12);

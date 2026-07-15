@@ -6,9 +6,9 @@ import {
   createAggregator,
   registrableDomainFromHost,
   parseFromHeader,
-} from "../public/filter.js";
-import { applyUserVerdict } from "../public/verdict.js";
-import { PAYMENT_GATEWAY_DOMAINS } from "../public/filter.rules.js";
+} from "../frontend/filter.js";
+import { applyUserVerdict } from "../frontend/verdict.js";
+import { PAYMENT_GATEWAY_DOMAINS } from "../frontend/filter.rules.js";
 
 function msg({
   from,
@@ -451,50 +451,7 @@ describe("SOW 004 filter integration (gate + score + verdict)", () => {
     assert.equal(agg.snapshot().services[0].likelyClosed, false);
   });
 
-  it("unsure on a 90-point candidate → band review (R6)", () => {
-    const agg = createAggregator({ selfEmail: "me@gmail.com" });
-    agg.add(
-      msg({
-        from: "S <n@brand-shop.com>",
-        subject: "이메일 인증이 완료되었습니다",
-        internalDate: String(Date.UTC(2024, 0, 10)),
-        headers: { authenticationResults: passArs("brand-shop.com") },
-      })
-    );
-    agg.add(
-      msg({
-        from: "S <n@brand-shop.com>",
-        subject: "비밀번호 재설정 안내",
-        internalDate: String(Date.UTC(2024, 1, 10)),
-        headers: { authenticationResults: passArs("brand-shop.com") },
-      })
-    );
-    const snap = agg.snapshot();
-    const key = snap.services[0].key;
-    assert.equal(snap.services[0].discoveryScore, 90);
-    const out = applyUserVerdict(snap, new Map([[key, "unsure"]]));
-    assert.equal(out.services[0].discoveryBand, "review");
-    assert.equal(out.services[0].discoveryScore, 90);
-  });
 
-  it("owned on a low-score candidate does not lower score (G6)", () => {
-    const agg = createAggregator({ selfEmail: "me@gmail.com" });
-    agg.add(
-      msg({
-        from: "S <n@brand-shop.com>",
-        subject: "주간 안내",
-        labelIds: ["CATEGORY_UPDATES"],
-        internalDate: String(Date.UTC(2024, 0, 10)),
-        headers: { authenticationResults: passArs("brand-shop.com") },
-      })
-    );
-    const snap = agg.snapshot();
-    const before = snap.services[0].discoveryScore;
-    assert.equal(before, 5);
-    const out = applyUserVerdict(snap, new Map([[snap.services[0].key, "owned"]]));
-    assert.equal(out.services[0].userStatus, "owned");
-    assert.equal(out.services[0].discoveryScore, before);
-  });
 });
 
 describe("SOW 005 R5 DNS label validation", () => {

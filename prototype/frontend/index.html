@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>디지털 발자국 정리 — 내 계정 찾기</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./app.css" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="masthead">
+        <h1>디지털 발자국 정리</h1>
+        <p>메일함에 남은 흔적으로 내가 가입한 서비스를 찾고, 정리할 곳으로 안내합니다.</p>
+      </header>
+
+      <section id="loginPanel" class="panel">
+        <div class="panel-head">
+          <h2>Google 계정으로 시작하기</h2>
+        </div>
+
+        <!-- Above the button on purpose: this answers the question the permission prompt
+             is about to ask. Comparable products put the same copy behind the request. -->
+        <div class="trust">
+          <ul>
+            <li><span><strong>메일 본문은 읽지 않습니다.</strong> 발신자와 제목 같은 헤더만 봅니다.</span></li>
+            <li><span><strong>메일이 서버로 가지 않습니다.</strong> 스캔은 브라우저 안에서 끝나고, 우리 서버는 메일을 받지 않습니다.</span></li>
+            <li><span><strong>대신 지워주지 않습니다.</strong> 탈퇴는 각 서비스의 공식 화면에서 직접 하시고, 저희는 그 경로만 안내합니다.</span></li>
+            <li><span>권한은 <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">Google 계정 설정</a>에서 언제든 해제할 수 있습니다.</span></li>
+          </ul>
+        </div>
+
+        <div id="googleBtn"></div>
+        <div id="loginStatus" class="note"></div>
+      </section>
+
+      <section id="appPanel" class="panel hidden">
+        <div class="panel-head">
+          <h2>내 계정 후보</h2>
+          <div id="status" class="note"></div>
+        </div>
+
+        <div class="actions">
+          <button id="scan" type="button" class="btn btn-primary">Gmail 연결하고 스캔</button>
+          <button id="save" type="button" class="btn btn-quiet" disabled>도메인 후보 저장</button>
+          <button id="logout" type="button" class="btn-text">로그아웃</button>
+        </div>
+
+        <div id="progress" class="progress"></div>
+        <div id="meta" class="meta"></div>
+        <div id="err" class="err"></div>
+
+        <p id="linkNote" class="note hidden">
+          발신 도메인에서 추정한 주소입니다. 공식 사이트인지 확인 후 이용하세요.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <caption class="hidden">발견된 계정 후보</caption>
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">서비스</th>
+                <th scope="col">도메인</th>
+                <th scope="col">신뢰</th>
+                <th scope="col">증거</th>
+                <th scope="col">최근 증거</th>
+                <th scope="col" class="col-count">건수</th>
+                <th scope="col">탈퇴</th>
+                <th scope="col">내 계정 아님</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+
+        <div id="emptyState" class="empty">
+          <p>아직 스캔하지 않았습니다.</p>
+          <p class="note">위의 <strong>Gmail 연결하고 스캔</strong>을 누르면 메일함에서 계정 흔적을 찾습니다.</p>
+        </div>
+
+        <div id="hiddenPanel" class="excluded">
+          <button id="hiddenToggle" type="button" class="btn-text">제외된 발신자 0개 보기</button>
+          <div id="hiddenBody" class="excluded-body hidden">
+            <p class="note">
+              규칙이 서비스가 아니라고 판단해 목록에서 뺀 발신자입니다. 아니라고 보이면 복구하세요.
+            </p>
+            <div class="table-wrap">
+              <table>
+                <caption class="hidden">제외된 발신자</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">서비스</th>
+                    <th scope="col">도메인</th>
+                    <th scope="col">사유</th>
+                    <th scope="col" class="col-count">건수</th>
+                    <th scope="col"><span class="hidden">복구</span></th>
+                  </tr>
+                </thead>
+                <tbody id="hiddenRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div
+      id="guideModal"
+      class="modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="guideTitle"
+      aria-hidden="true"
+    >
+      <div id="guideBackdrop" class="modal-backdrop"></div>
+      <div class="modal-dialog">
+        <div class="modal-top">
+          <button type="button" id="guideClose" class="modal-close" aria-label="닫기">×</button>
+        </div>
+        <div id="guideBody"></div>
+      </div>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { authVerdict, splitAuthservBlocks } from "../public/authenticity.js";
+import { authVerdict, splitAuthservBlocks } from "../frontend/authenticity.js";
 
 describe("SOW 004 R1 authenticity gate", () => {
   it("absent header → not pass, reason no_authserv_id", () => {

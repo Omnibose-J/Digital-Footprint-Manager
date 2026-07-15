@@ -4,7 +4,7 @@ import {
   maskAccount,
   renderRequestTemplate,
   renderGuideHtml,
-} from "../public/guide.js";
+} from "../frontend/guide.js";
 
 describe("guide template (E6)", () => {
   it("masks account as so****@gmail.com shape", () => {

@@ -22,6 +22,7 @@ const hiddenToggle = el("hiddenToggle");
 const hiddenBody = el("hiddenBody");
 const hiddenRows = el("hiddenRows");
 const linkNote = el("linkNote");
+const emptyState = el("emptyState");
 const scanBtn = el("scan");
 const saveBtn = el("save");
 const logoutBtn = el("logout");
@@ -55,9 +56,9 @@ let lastSnapshot = null;
 /**
  * key -> user's explicit verdict. Held outside the aggregator; re-applied on every render,
  * because each progress tick hands us a fresh snapshot that knows nothing about user input.
- * Session-only — a reload resets it (no persistence in this SOW).
+ * Session-only — a reload resets it (persistence needs the database, §8).
  */
-const userVerdict = new Map(); // 'owned' | 'not_mine' | 'unsure' | 'candidate'
+const userVerdict = new Map(); // 'not_mine' | 'candidate'
 
 const BAND_LABEL = {
   high: "높음",
@@ -81,7 +82,7 @@ function evidenceBadges(families) {
       parts.push(`<span class="badge">${escapeHtml(FAMILY_LABEL[f] || f)}</span>`);
     }
   }
-  return parts.join(" · ") || "—";
+  return parts.length ? `<span class="badges">${parts.join("")}</span>` : "—";
 }
 
 function serviceCell(s) {
@@ -93,8 +94,8 @@ function serviceCell(s) {
 }
 
 function deletionCell(s, index) {
-  if (s.likelyClosed && s.userStatus !== "owned") {
-    return `<span class="badge badge-closed">폐쇄 추정</span>`;
+  if (s.likelyClosed) {
+    return `<span class="band band-closed">폐쇄 추정</span>`;
   }
   const label =
     s.linkSafety === "verified"
@@ -102,27 +103,21 @@ function deletionCell(s, index) {
         ? "탈퇴 (검토 필요)"
         : "탈퇴"
       : "탈퇴 안내";
-  return `<button type="button" class="guide-open-btn" data-guide="${index}">${label}</button>`;
+  return `<button type="button" class="btn-row" data-guide="${index}">${label}</button>`;
 }
 
 function bandCell(s) {
   const band = s.discoveryBand || "low";
   const score = s.discoveryScore ?? 0;
   const expl = s.scoreExplanation || `${score}점`;
-  const owned = s.userStatus === "owned" ? ` <span class="badge badge-owned">내 계정</span>` : "";
-  const closed =
-    s.likelyClosed && s.userStatus !== "owned"
-      ? ` <span class="badge badge-closed">폐쇄 추정</span>`
-      : "";
-  return `<span class="badge badge-band badge-${escapeHtml(band)}">${escapeHtml(BAND_LABEL[band] || band)}</span> ${escapeHtml(String(score))} · ${escapeHtml(expl)}${owned}${closed}`;
+  const closed = s.likelyClosed ? ` <span class="band band-closed">폐쇄 추정</span>` : "";
+  return `<span class="band band-${escapeHtml(band)}">${escapeHtml(BAND_LABEL[band] || band)} ${escapeHtml(String(score))}</span>${closed}<span class="score-why">${escapeHtml(expl)}</span>`;
 }
 
-function confirmCell(index) {
-  return [
-    `<button type="button" class="confirm-btn" data-owned="${index}">내 계정</button>`,
-    `<button type="button" class="not-mine-btn" data-not-mine="${index}">아님</button>`,
-    `<button type="button" class="unsure-btn" data-unsure="${index}">모르겠음</button>`,
-  ].join(" ");
+function notMineCell(index) {
+  // The only user verdict with a consumer: it drops the row, and its rate inside the high
+  // band is the §7 precision gate. "내 계정" / "모르겠음" wait for the cleanup list (§4).
+  return `<button type="button" class="btn-row" data-not-mine="${index}">내 계정 아님</button>`;
 }
 
 function withCatalog(rawSnapshot) {
@@ -140,16 +135,16 @@ function renderSnapshot(rawSnapshot) {
   rows.innerHTML = services
     .map(
       (s, i) =>
-        `<tr class="${s.likelyClosed && s.userStatus !== "owned" ? "row-closed" : ""}">
+        `<tr class="${s.likelyClosed ? "row-closed" : ""}">
           <td>${i + 1}</td>
-          <td>${serviceCell(s)}</td>
-          <td>${escapeHtml(s.registrableDomain || "")}</td>
+          <td class="cell-service">${serviceCell(s)}</td>
+          <td class="cell-domain">${escapeHtml(s.registrableDomain || "")}</td>
           <td>${bandCell(s)}</td>
           <td>${evidenceBadges(s.families)}</td>
-          <td>${escapeHtml(s.lastSeenMonth || "—")}</td>
-          <td>${s.messageCount}</td>
+          <td class="cell-month">${escapeHtml(s.lastSeenMonth || "—")}</td>
+          <td class="col-count">${s.messageCount}</td>
           <td>${deletionCell(s, i)}</td>
-          <td>${confirmCell(i)}</td>
+          <td>${notMineCell(i)}</td>
         </tr>`
     )
     .join("");
@@ -163,16 +158,17 @@ function renderSnapshot(rawSnapshot) {
       const reason = RULE_LABEL[s.hiddenRule] || s.hiddenRule || "—";
       return `<tr>
           <td>${i + 1}</td>
-          <td>${escapeHtml(s.displayName || s.registrableDomain || "")}</td>
-          <td>${escapeHtml(s.registrableDomain || "")}</td>
-          <td>${escapeHtml(reason)}</td>
+          <td class="cell-service">${escapeHtml(s.displayName || s.registrableDomain || "")}</td>
+          <td class="cell-domain">${escapeHtml(s.registrableDomain || "")}</td>
+          <td class="reason">${escapeHtml(reason)}</td>
           <td>${s.messageCount}</td>
-          <td><button type="button" class="restore-btn" data-restore="${i}">복구</button></td>
+          <td><button type="button" class="btn-row" data-restore="${i}">복구</button></td>
         </tr>`;
     })
     .join("");
 
   saveBtn.disabled = services.length === 0;
+  emptyState?.classList.toggle("hidden", services.length > 0);
 }
 
 function formatProgress(p, stats) {
@@ -357,24 +353,6 @@ hiddenRows?.addEventListener("click", (ev) => {
 });
 
 rows?.addEventListener("click", (ev) => {
-  const ownedBtn = ev.target.closest("[data-owned]");
-  if (ownedBtn && lastSnapshot) {
-    const idx = Number(ownedBtn.getAttribute("data-owned"));
-    const item = lastSnapshot.services[idx];
-    if (!item?.key) return;
-    userVerdict.set(item.key, "owned");
-    renderSnapshot(lastSnapshot);
-    return;
-  }
-  const unsureBtn = ev.target.closest("[data-unsure]");
-  if (unsureBtn && lastSnapshot) {
-    const idx = Number(unsureBtn.getAttribute("data-unsure"));
-    const item = lastSnapshot.services[idx];
-    if (!item?.key) return;
-    userVerdict.set(item.key, "unsure");
-    renderSnapshot(lastSnapshot);
-    return;
-  }
   const notMineBtn = ev.target.closest("[data-not-mine]");
   if (notMineBtn && lastSnapshot) {
     const idx = Number(notMineBtn.getAttribute("data-not-mine"));

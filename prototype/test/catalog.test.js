@@ -9,12 +9,12 @@ import {
   isStale,
   VALID_ROUTES,
   VALID_CATEGORIES,
-} from "../public/catalog.js";
-import { createAggregator } from "../public/filter.js";
+} from "../frontend/catalog.js";
+import { createAggregator } from "../frontend/filter.js";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const catalog = JSON.parse(
-  readFileSync(join(root, "../public/catalog.json"), "utf8")
+  readFileSync(join(root, "../frontend/catalog.json"), "utf8")
 );
 
 function msg({

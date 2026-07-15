@@ -4,7 +4,9 @@
  * Pure by design, and separate from app.js on purpose: every progress tick replaces the snapshot,
  * so this has to re-run on each render, and it has to be testable without a DOM.
  *
- * CandidateStatus (PRODUCT_SPEC §3 / SOW 004 R6): owned | not_mine | unsure | (restore) candidate
+ * PRODUCT_SPEC §3 also defines owned and unsure. They are not here: nothing consumes them
+ * yet. The cleanup list they feed (§4) does not exist, so they only ever set a badge.
+ * Bring them back with that list, not before.
  */
 
 /** Score desc, then messageCount desc — single shared comparator (SOW 005 R9). */
@@ -30,7 +32,7 @@ function sortBuckets(snapshot) {
 
 /**
  * @param {any} snapshot aggregator snapshot
- * @param {Map<string, 'owned'|'not_mine'|'unsure'|'candidate'>} verdicts keyed by ServiceCandidate.key
+ * @param {Map<string, 'not_mine'|'candidate'>} verdicts keyed by ServiceCandidate.key
  */
 export function applyUserVerdict(snapshot, verdicts) {
   if (!snapshot) return snapshot;
@@ -68,7 +70,6 @@ export function applyUserVerdict(snapshot, verdicts) {
   hidden = pullToServices(hidden);
   unresolved = pullToServices(unresolved);
 
-  services = services.map((s) => applyStatus(s, verdicts.get(s.key)));
 
   return sortBuckets({
     services,
@@ -93,29 +94,3 @@ function annotateDefaults(snapshot) {
   };
 }
 
-/**
- * owned: score never lowered (G6).
- * unsure: force band to review regardless of score (R6).
- */
-function applyStatus(service, status) {
-  if (status === "owned") {
-    return {
-      ...service,
-      userStatus: "owned",
-      // Score number unchanged — override is confirmation, not a rewrite (G6).
-      discoveryScore: service.discoveryScore,
-      discoveryBand: service.discoveryBand,
-    };
-  }
-  if (status === "unsure") {
-    return {
-      ...service,
-      userStatus: "unsure",
-      discoveryBand: "review",
-    };
-  }
-  return {
-    ...service,
-    userStatus: status || service.userStatus || null,
-  };
-}
