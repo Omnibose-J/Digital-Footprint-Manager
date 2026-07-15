@@ -74,6 +74,35 @@ describe("SOW 004 R3 discoveryScore", () => {
     assert.equal(r.familyScores.auth, 35);
   });
 
+  it("auth accumulates per distinct month instead of freezing at the second", () => {
+    // The old rule was `length >= 2 ? 45 : 35`: two months and twenty both scored 45.
+    const months = (n) => Array.from({ length: n }, (_, i) => `2024-${String(i + 1).padStart(2, "0")}`);
+    assert.equal(computeDiscoveryScore({ authMonths: months(1) }).familyScores.auth, 35);
+    assert.equal(computeDiscoveryScore({ authMonths: months(2) }).familyScores.auth, 45);
+    assert.equal(computeDiscoveryScore({ authMonths: months(3) }).familyScores.auth, 55);
+    assert.equal(computeDiscoveryScore({ authMonths: months(9) }).familyScores.auth, 55);
+  });
+
+  it("auth alone never reaches high: an OTP can reach someone with no account", () => {
+    const r = computeDiscoveryScore({
+      authMonths: ["2024-01", "2024-02", "2024-03", "2024-04", "2024-05"],
+    });
+    assert.equal(r.discoveryScore, 55);
+    assert.equal(r.discoveryBand, "review");
+  });
+
+  it("an old account with no signup mail can still reach high on auth + notifications", () => {
+    // The measured failure: GitHub, 252 messages, password resets across years, sat at 65 because
+    // auth was capped at 45 and its signup mail predates the mailbox.
+    const r = computeDiscoveryScore({
+      authMonths: ["2023-04", "2024-01", "2025-06"],
+      notificationMonths: ["2024-01", "2024-02", "2024-03"],
+      hasMarketing: true,
+    });
+    assert.equal(r.discoveryScore, 75);
+    assert.equal(r.discoveryBand, "high");
+  });
+
   it("50 marketing only → 5 low, never high (G4)", () => {
     const r = computeDiscoveryScore({ hasMarketing: true });
     assert.equal(r.discoveryScore, 5);

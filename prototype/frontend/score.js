@@ -66,9 +66,21 @@ export function computeDiscoveryScore(evidence = {}) {
     });
   }
 
-  // Auth: 35 first month, +10 second; cap 45.
+  // Auth: 35 first distinct month, +10 each additional; cap 55.
+  //
+  // The old rule was `length >= 2 ? 45 : 35`, which threw the month count away: two months and
+  // twenty months both scored 45. With the cap at 45 that also put a ceiling under the family,
+  // so no quantity of password-reset evidence over any span could reach high. The table was
+  // asserting that a password reset never makes us confident an account exists, and that is
+  // backwards. The service honoured the reset, which is the service itself confirming the account
+  // is there and that this user holds it: the most conclusive signal we get, and unlike a signup
+  // mail it is still arriving for accounts older than the mailbox.
+  //
+  // 55 keeps auth alone below high on purpose. An OTP can reach someone with no account (guest
+  // checkout, phone verification), so auth still needs corroboration to clear 70. What it no
+  // longer needs is a signup mail that no longer exists.
   if (authMonths.length >= 1) {
-    familyScores.auth = authMonths.length >= 2 ? 45 : 35;
+    familyScores.auth = Math.min(55, 35 + 10 * (authMonths.length - 1));
     contributions.push({
       family: "auth",
       key: "auth",
