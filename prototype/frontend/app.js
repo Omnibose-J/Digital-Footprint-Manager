@@ -1,4 +1,4 @@
-import { collectSenders } from "./scan.js";
+import { collectSenders, scanFraction } from "./scan.js";
 import { createAggregator } from "./filter.js";
 import { loadCatalog, upgradeSnapshot, isStale } from "./catalog.js";
 import { renderGuideHtml, renderRequestTemplate, maskAccount } from "./guide.js";
@@ -15,6 +15,8 @@ const googleBtn = el("googleBtn");
 const loginStatus = el("loginStatus");
 const statusEl = el("status");
 const progressEl = el("progress");
+const progressTrack = el("progressTrack");
+const progressBar = el("progressBar");
 const meta = el("meta");
 const err = el("err");
 const rows = el("rows");
@@ -171,6 +173,20 @@ function renderSnapshot(rawSnapshot) {
   emptyState?.classList.toggle("hidden", services.length > 0);
 }
 
+function setProgressBar(fraction) {
+  if (fraction === null) {
+    progressTrack.hidden = true;
+    return;
+  }
+  progressTrack.hidden = false;
+  progressBar.style.transform = `scaleX(${fraction})`;
+}
+
+function resetProgressBar() {
+  progressTrack.hidden = true;
+  progressBar.style.transform = "scaleX(0)";
+}
+
 function formatProgress(p, stats) {
   const totalLabel = p.target ? String(p.target) : "?";
   if (p.phase === "listing") {
@@ -199,6 +215,7 @@ function setLoggedOutUI() {
   loginPanel.classList.remove("hidden");
   statusEl.textContent = "";
   progressEl.textContent = "";
+  resetProgressBar();
   meta.textContent = "";
   rows.innerHTML = "";
   hiddenRows.innerHTML = "";
@@ -385,6 +402,7 @@ scanBtn?.addEventListener("click", async () => {
   err.textContent = "";
   meta.textContent = "";
   progressEl.textContent = "Gmail 권한 요청 중…";
+  resetProgressBar();
   rows.innerHTML = "";
   hiddenRows.innerHTML = "";
   lastSnapshot = null;
@@ -417,6 +435,7 @@ scanBtn?.addEventListener("click", async () => {
         const snap = aggregator.snapshot();
         renderSnapshot(snap);
         progressEl.textContent = formatProgress(p, snap.stats);
+        setProgressBar(scanFraction(p));
       },
     });
 
@@ -434,6 +453,8 @@ scanBtn?.addEventListener("click", async () => {
     const closedN = finalSnap.services.filter((s) => s.likelyClosed).length;
 
     progressEl.textContent = `완료: ${result.fetched} / ${result.scannedIds}${result.unlimited ? " (전체)" : ""}`;
+    // The last tick lands a hair short of the total; a bar that stops at 99% reads as a stall.
+    setProgressBar(1);
     meta.textContent = [
       `Gmail: ${result.account}`,
       `스캔 ID: ${result.scannedIds}`,

@@ -77,8 +77,21 @@
   --shadow-raised: 0 6px 18px rgba(0, 100, 224, 0.24);
   --shadow-overlay: 0 24px 64px rgba(10, 19, 23, 0.24);
 
-  --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* Motion seed: Silk. One family, product-wide. Spring or Pulse would be wrong on a screen
+     that is asking to read a mailbox, and Snap would fight the soft shapes this palette brought.
+     Built-in CSS easings are too weak to read as intentional, so these are explicit. */
+  --ease-enter: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease: var(--ease-move);
+
+  --dur-press: 120ms;
   --dur: 150ms;
+  --dur-enter: 420ms;
+  --dur-modal: 240ms;
+  /* Slightly above scan.js's 120ms progress throttle, so the bar is always still moving toward
+     the next tick instead of stalling between them. */
+  --dur-tick: 140ms;
+  --stagger: 80ms;
 }
 
 *,
@@ -129,6 +142,24 @@ body {
 
 .hero .panel {
   margin-bottom: 0;
+}
+
+/* One orchestrated load rather than micro-interactions scattered over the page. Two elements,
+   one stagger: the lead leads, the explainer follows. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.hero-lead,
+.hero-side {
+  animation: rise var(--dur-enter) var(--ease-enter) both;
+}
+
+.hero-side {
+  animation-delay: var(--stagger);
 }
 
 .hero-lead h1 {
@@ -389,6 +420,30 @@ button {
   min-height: 1.5em;
 }
 
+/* The one place motion carries information rather than decorating. A full mailbox is roughly
+   four minutes of fetching, and the text line alone cannot say whether that is moving. */
+.progress-track {
+  height: 4px;
+  margin-top: var(--s2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.progress-track[hidden] {
+  display: none;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  /* linear: this tracks a real quantity, and any easing would make it lie between ticks. */
+  transition: transform var(--dur-tick) linear;
+}
+
 .meta {
   color: var(--ink-quiet);
   font-size: var(--text-xs);
@@ -611,11 +666,28 @@ tr.row-closed td {
   display: none !important;
 }
 
+/* Occasional action, so standard duration. Enter only: the dialog is toggled with display:none,
+   and buying an exit means holding the element alive on animationend for 160ms. Not worth the
+   wiring for a close the user has already decided on. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
 .modal-backdrop {
   position: absolute;
   inset: 0;
   background: rgba(10, 19, 23, 0.4);
   backdrop-filter: blur(4px);
+  animation: fade-in var(--dur-modal) var(--ease-enter) both;
 }
 
 .modal-dialog {
@@ -630,6 +702,8 @@ tr.row-closed td {
   border-radius: var(--radius-shell);
   box-shadow: var(--shadow-overlay);
   padding: var(--s4) var(--s6) var(--s6);
+  /* Centred, so it scales in place rather than from a trigger. */
+  animation: dialog-in var(--dur-modal) var(--ease-enter) both;
 }
 
 .modal-top {
@@ -752,11 +826,27 @@ tr.row-closed td {
   }
 }
 
+/* Gentler, not off. Killing every duration also kills the fades, and those are what explain
+   that something appeared. Only movement goes. The progress bar stays: it is 4px of travel
+   reporting a real quantity, and freezing it would withhold the answer to "is this working". */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
+  @keyframes rise {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .btn:hover:not(:disabled) {
+    transform: none;
+  }
+
+  tbody tr {
+    transition: none;
   }
 }

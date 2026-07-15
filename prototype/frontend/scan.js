@@ -99,6 +99,24 @@ export function headerMap(headers) {
   return out;
 }
 
+/**
+ * Fraction of the mailbox whose headers are in, from an onProgress payload.
+ *
+ * Counts errors as done: a message that failed permanently is never coming back, and leaving it
+ * out strands the bar short of full for the rest of the scan. Measures fetching, not listing:
+ * listing is seconds and fetching is minutes, so a bar driven by scannedIds would race to full
+ * and then sit still through the entire wait it is supposed to be reporting.
+ *
+ * @param {{ fetched?: number, errors?: number, target?: number, scannedIds?: number }} p
+ * @returns {number|null} 0..1, or null while no total is known yet
+ */
+export function scanFraction(p) {
+  const total = Number(p?.target) || Number(p?.scannedIds) || 0;
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const done = (Number(p?.fetched) || 0) + (Number(p?.errors) || 0);
+  return Math.min(1, Math.max(0, done / total));
+}
+
 export function shouldRetryGmail(err, attempt) {
   if (attempt >= 4) return false;
   if (err?.status === 429) return true;

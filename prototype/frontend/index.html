@@ -64,7 +64,10 @@
           <button id="logout" type="button" class="btn-text">로그아웃</button>
         </div>
 
-        <div id="progress" class="progress"></div>
+        <div id="progress" class="progress" role="status" aria-live="polite"></div>
+        <div id="progressTrack" class="progress-track" hidden>
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
         <div id="meta" class="meta"></div>
         <div id="err" class="err"></div>
 

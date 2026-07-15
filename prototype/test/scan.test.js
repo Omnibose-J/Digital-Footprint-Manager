@@ -6,6 +6,7 @@ import {
   isRateLimitReason,
   shouldRetryGmail,
   collectSenders,
+  scanFraction,
 } from "../frontend/scan.js";
 import { authVerdict } from "../frontend/authenticity.js";
 import { createAggregator } from "../frontend/filter.js";
@@ -178,5 +179,34 @@ describe("SOW 005 R7 selfEmail comes from the Gmail profile", () => {
     assert.ok(agg.snapshot().hidden.some((h) => h.hiddenRule === "self"));
     assert.equal(agg.snapshot().services.length, 0);
     assert.equal(bare.snapshot().hidden.filter((h) => h.hiddenRule === "self").length, 0);
+  });
+});
+
+describe("scanFraction drives the progress bar", () => {
+  it("reports fetching, not listing: a bar on scannedIds would sit full through the whole wait", () => {
+    // Listing has run ahead of fetching, which is the normal shape: pages of 500 ids land in
+    // seconds, their headers take minutes.
+    assert.equal(scanFraction({ target: 1000, scannedIds: 1000, fetched: 0 }), 0);
+    assert.equal(scanFraction({ target: 1000, scannedIds: 1000, fetched: 250 }), 0.25);
+  });
+
+  it("counts permanent errors as done, or the bar never reaches full", () => {
+    // A message that failed on insufficientPermissions is not retried and never arrives.
+    assert.equal(scanFraction({ target: 100, fetched: 90, errors: 10 }), 1);
+    assert.equal(scanFraction({ target: 100, fetched: 90, errors: 0 }), 0.9);
+  });
+
+  it("no total yet -> null, so the track stays hidden rather than showing a fake zero", () => {
+    assert.equal(scanFraction({ fetched: 0 }), null);
+    assert.equal(scanFraction({ target: 0, scannedIds: 0 }), null);
+    assert.equal(scanFraction(undefined), null);
+  });
+
+  it("falls back to scannedIds when the profile total is missing", () => {
+    assert.equal(scanFraction({ scannedIds: 200, fetched: 50 }), 0.25);
+  });
+
+  it("clamps: estimatedTotal is an estimate and fetched can overshoot it", () => {
+    assert.equal(scanFraction({ target: 100, fetched: 140 }), 1);
   });
 });
