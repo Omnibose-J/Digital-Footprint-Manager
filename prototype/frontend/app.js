@@ -4,6 +4,7 @@ import { loadCatalog, upgradeSnapshot, isStale } from "./catalog.js";
 import { renderGuideHtml, renderRequestTemplate, maskAccount } from "./guide.js";
 import { applyUserVerdict } from "./verdict.js";
 import { escapeHtml } from "./html.js";
+import { initAnalytics, track } from "./analytics.js";
 
 function el(id) {
   return document.getElementById(id);
@@ -283,6 +284,13 @@ function openGuide(candidate, trigger) {
   guideModal.classList.remove("hidden");
   guideModal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
+  // band and route are our own enums; catalogued is a boolean about our coverage, not about them.
+  track("guide_opened", {
+    band: candidate.discoveryBand || "low",
+    catalogued: Boolean(entry),
+    route: entry?.deletion_route || "none",
+    stale,
+  });
   guideClose?.focus();
 
   const copyBtn = document.getElementById("guideCopyBtn");
@@ -290,6 +298,8 @@ function openGuide(candidate, trigger) {
     const tpl = renderRequestTemplate({ serviceName, maskedAccount: masked });
     try {
       await navigator.clipboard.writeText(tpl.fullText);
+      // The strongest signal a guide was actually used. Still says nothing about which service.
+      track("template_copied", { catalogued: Boolean(entry) });
       copyBtn.textContent = "복사됨";
       setTimeout(() => {
         copyBtn.textContent = "템플릿 복사";
@@ -514,6 +524,16 @@ scanBtn?.addEventListener("click", async () => {
 
     // The diagnostics still exist, in the console, where they are for us. Every scoring decision
     // made today was argued from these two numbers, so they do not get to disappear.
+    track("scan_completed", {
+      messages: result.fetched,
+      candidates: finalSnap.stats.services,
+      high: bands.high,
+      review: bands.review,
+      low: bands.low,
+      excluded: finalSnap.stats.hidden + finalSnap.stats.unresolved,
+      errors: result.errors,
+    });
+
     console.info("[dfm] scan", {
       account: result.account,
       listed: result.scannedIds,
@@ -556,6 +576,9 @@ async function boot() {
   const cfgRes = await fetch("/api/config");
   config = await cfgRes.json();
   if (!cfgRes.ok) throw new Error(config.error || "config failed");
+
+  // Empty GA_MEASUREMENT_ID disables analytics entirely, which is what the e2e runs with.
+  initAnalytics(config.gaMeasurementId);
 
   try {
     catalog = await loadCatalog();

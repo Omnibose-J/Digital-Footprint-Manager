@@ -7,24 +7,24 @@ import { OAuth2Client } from "google-auth-library";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, "..", "frontend");
 const port = Number(process.env.PORT || 3456);
+const gaMeasurementId = process.env.GA_MEASUREMENT_ID || "";
 const clientId = process.env.GOOGLE_CLIENT_ID || "";
 const concurrency = Number(process.env.GMAIL_CONCURRENCY || 12);
 const maxMessages = Number(process.env.GMAIL_MAX_MESSAGES || 0);
 
-/** Approved candidate domains per user sub (no full sender addresses) */
-/** @type {Map<string, { domains: Array<{ domain: string, count: number }>, savedAt: string }>} */
 const oauthClient = clientId ? new OAuth2Client(clientId) : null;
 
 /** PRODUCT_SPEC §6 / SOW 005 R2 — GIS sign-in must keep working (H3). */
 const CONTENT_SECURITY_POLICY = [
   "default-src 'none'",
-  "script-src 'self' https://accounts.google.com/gsi/client",
+  // googletagmanager serves gtag.js; region1.google-analytics.com is where it beacons.
+  "script-src 'self' https://accounts.google.com/gsi/client https://www.googletagmanager.com",
   "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
   // GIS token client talks to accounts.google.com (not only /gsi/) and oauth2.googleapis.com;
   // Gmail metadata stays on gmail.googleapis.com.
-  "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://gmail.googleapis.com",
+  "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://gmail.googleapis.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
   "frame-src https://accounts.google.com/gsi/ https://accounts.google.com/",
-  "img-src 'self' data: https://*.googleusercontent.com",
+  "img-src 'self' data: https://*.googleusercontent.com https://*.google-analytics.com https://www.googletagmanager.com",
   "frame-ancestors 'none'",
   "base-uri 'none'",
   "form-action 'self'",
@@ -131,6 +131,7 @@ app.get("/api/config", (_req, res) => {
     maxMessages,
     concurrency,
     gmailScope: "https://www.googleapis.com/auth/gmail.readonly",
+    gaMeasurementId,
   });
 });
 
