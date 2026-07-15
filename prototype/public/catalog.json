@@ -1,0 +1,237 @@
+{
+  "version": "2026-07-15",
+  "attribution": "Partly seeded from JustDeleteMe (https://github.com/jdm-contrib/jdm), MIT. Every entry below was opened and read against its official_source_url on 2026-07-15; unverified candidates were excluded.",
+  "services": [
+    {
+      "service_id": "kakao",
+      "display_name": "카카오계정",
+      "canonical_domain": "kakao.com",
+      "sender_domain_aliases": ["kakao.com"],
+      "category": "social",
+      "deletion_route": "self_service",
+      "url": "https://accounts.kakao.com/",
+      "steps": [
+        "카카오계정 홈(https://accounts.kakao.com)에 로그인",
+        "계정 이용 > 카카오계정 탈퇴 선택",
+        "연결된 유료·금융 서비스가 있으면 먼저 해지·설정 변경 후 탈퇴 진행"
+      ],
+      "prerequisites": [
+        "카카오톡만 쓰는 계정이면 톡 탈퇴 시 계정도 함께 삭제될 수 있음",
+        "금전적 문제·타인 이용에 영향이 있는 연결 서비스는 선해지 필요"
+      ],
+      "identity_verification": "카카오계정 로그인",
+      "grace_period": "안내에 따름(연결 서비스 해지 후)",
+      "official_source_url": "https://cs.kakao.com/helps_html/1073185457?locale=ko",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "spotify",
+      "display_name": "Spotify",
+      "canonical_domain": "spotify.com",
+      "sender_domain_aliases": ["spotify.com"],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://www.spotify.com/kr-ko/account/close/",
+      "steps": [
+        "공식 '계정 해지 및 데이터 삭제' 페이지로 이동해 로그인",
+        "계정 해지 및 데이터 삭제 절차 완료",
+        "해지 후 7일 이내 재활성화 메일을 받을 수 있음 — 7일 지나면 삭제 프로세스 시작"
+      ],
+      "prerequisites": [
+        "Premium만 끊으려면 탈퇴가 아니라 무료 요금제 전환",
+        "구매한 오디오북·라이브 티켓 접근권 상실"
+      ],
+      "identity_verification": "Spotify 로그인",
+      "grace_period": "7일 재활성화 가능, 이후 삭제 시작",
+      "official_source_url": "https://support.spotify.com/kr-ko/article/how-can-i-close-my-spotify-account/",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "google",
+      "display_name": "Google",
+      "canonical_domain": "google.com",
+      "sender_domain_aliases": ["google.com"],
+      "category": "cloud",
+      "deletion_route": "self_service",
+      "url": "https://myaccount.google.com/data-and-privacy",
+      "steps": [
+        "Google 계정의 데이터 및 개인정보 보호 섹션으로 이동",
+        "데이터 및 개인정보 보호 옵션에서 'Google 계정 삭제' 선택",
+        "안내에 따라 계정 삭제 완료"
+      ],
+      "prerequisites": [
+        "삭제 전 보관할 데이터는 Google Takeout 등으로 다운로드",
+        "Gmail만 지우려면 전체 계정 삭제가 아닌 'Google 서비스 삭제' 경로를 확인"
+      ],
+      "identity_verification": "Google 로그인",
+      "grace_period": "일정 기간 내 복구 가능할 수 있음(공식 안내에 따름)",
+      "official_source_url": "https://support.google.com/accounts/answer/32046?hl=ko",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "github",
+      "display_name": "GitHub",
+      "canonical_domain": "github.com",
+      "sender_domain_aliases": ["github.com"],
+      "category": "productivity",
+      "deletion_route": "self_service",
+      "url": "https://github.com/settings/admin",
+      "steps": [
+        "GitHub 프로필 > Settings > Account",
+        "Delete account 에서 Delete your account 선택",
+        "사용자명/이메일과 확인 문구를 입력해 삭제 확정"
+      ],
+      "prerequisites": [
+        "저장소·이슈·PR 등 백업 후 진행",
+        "삭제 후 GitHub는 콘텐츠를 복구할 수 없음"
+      ],
+      "identity_verification": "GitHub 로그인 + 확인 문구",
+      "grace_period": "즉시(복구 불가)",
+      "official_source_url": "https://docs.github.com/en/account-and-profile/how-tos/account-management/deleting-your-personal-account",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "linkedin",
+      "display_name": "LinkedIn",
+      "canonical_domain": "linkedin.com",
+      "sender_domain_aliases": ["linkedin.com"],
+      "category": "social",
+      "deletion_route": "self_service",
+      "url": "https://www.linkedin.com/mypreferences/d/close-account",
+      "steps": [
+        "Me > Settings & Privacy",
+        "Account preferences > Account management > Close account 옆 Change",
+        "사유 선택 후 비밀번호 입력하고 Close account"
+      ],
+      "prerequisites": [
+        "Premium·그룹 소유·엔터프라이즈 라이선스가 있으면 선해지/해제",
+        "필요 시 데이터 다운로드 후 진행"
+      ],
+      "identity_verification": "LinkedIn 비밀번호",
+      "grace_period": "대부분 14일 이내 재개설 가능(일부 데이터는 복구 불가)",
+      "official_source_url": "https://www.linkedin.com/help/linkedin/answer/a1379064",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "discord",
+      "display_name": "Discord",
+      "canonical_domain": "discord.com",
+      "sender_domain_aliases": ["discord.com"],
+      "category": "community",
+      "deletion_route": "self_service",
+      "url": "https://discord.com/channels/@me",
+      "steps": [
+        "User Settings(톱니바퀴) > My Account",
+        "Delete Account 선택",
+        "소유 서버는 소유권 이전 또는 삭제 후 비밀번호(+2FA) 입력해 삭제 확정"
+      ],
+      "prerequisites": [
+        "소유 중인 서버 소유권 이전/삭제 필수",
+        "확정 후 15일 pending deletion — 그 안에 로그인하면 복구 가능"
+      ],
+      "identity_verification": "비밀번호 및(해당 시) 2FA",
+      "grace_period": "15일 pending deletion",
+      "official_source_url": "https://support.discord.com/hc/en-us/articles/212500837-How-to-Delete-your-Discord-Account",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "apple",
+      "display_name": "Apple",
+      "canonical_domain": "apple.com",
+      "sender_domain_aliases": ["apple.com"],
+      "category": "cloud",
+      "deletion_route": "self_service",
+      "url": "https://privacy.apple.com/",
+      "steps": [
+        "Apple 데이터 및 개인정보 보호 페이지(privacy.apple.com)에 Apple 계정으로 로그인",
+        "Apple 계정 및 연결 데이터 영구 삭제 요청 선택",
+        "안내에 따라 요청 완료 — 처리 중 제공되는 접근 코드를 보관"
+      ],
+      "prerequisites": [
+        "일시 비활성화와 영구 삭제는 다름 — 영구 삭제를 선택",
+        "구독·가족 공유·기기 종속성을 먼저 정리"
+      ],
+      "identity_verification": "Apple 계정 로그인",
+      "grace_period": "요청 처리 중 짧은 취소 창(접근 코드로 지원 요청)",
+      "official_source_url": "https://support.apple.com/ko-kr/102283",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "microsoft",
+      "display_name": "Microsoft",
+      "canonical_domain": "microsoft.com",
+      "sender_domain_aliases": ["microsoft.com"],
+      "category": "cloud",
+      "deletion_route": "self_service",
+      "url": "https://account.live.com/closeaccount.aspx",
+      "steps": [
+        "Microsoft 계정 폐쇄 페이지에 로그인",
+        "올바른 계정인지 확인 후 Next",
+        "체크리스트 확인 → 재개설 기간(30/60일) 선택 → 사유 선택 → Mark account for closure"
+      ],
+      "prerequisites": [
+        "Outlook·OneDrive·Xbox·Skype 등 연결 데이터 백업",
+        "로그인할 수 없으면 Sign-in helper로 복구 후 진행"
+      ],
+      "identity_verification": "Microsoft 계정 로그인",
+      "grace_period": "30일 또는 60일 재개설 창",
+      "official_source_url": "https://support.microsoft.com/en-US/accounts-billing/manage/how-to-close-your-microsoft-account",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "naver",
+      "display_name": "네이버",
+      "canonical_domain": "naver.com",
+      "sender_domain_aliases": ["naver.com"],
+      "category": "email",
+      "deletion_route": "self_service",
+      "url": "https://nid.naver.com/user2/help/leaveId?lang=ko_KR",
+      "steps": [
+        "네이버에 로그인한 상태에서 홈의 네이버ID 클릭",
+        "네이버ID 영역에서 회원 탈퇴 선택",
+        "주의사항을 확인한 뒤 탈퇴 완료"
+      ],
+      "prerequisites": [
+        "탈퇴 ID는 재가입·복구 불가",
+        "로그인 불가 시 아이디·비밀번호 찾기 먼저"
+      ],
+      "identity_verification": "네이버 로그인",
+      "grace_period": "즉시(복구 불가)",
+      "official_source_url": "https://help.naver.com/service/5640/contents/1435?osType=PC&lang=ko",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "privacy_go_kr",
+      "display_name": "개인정보 포털 정보주체 권리행사",
+      "canonical_domain": "privacy.go.kr",
+      "sender_domain_aliases": ["privacy.go.kr"],
+      "category": "identity",
+      "deletion_route": "public_service",
+      "url": "https://www.privacy.go.kr/front/wcp/dcl/per/memberSecStep1.do",
+      "steps": [
+        "개인정보 포털의 웹사이트 회원 탈퇴 신청 페이지로 이동",
+        "개인정보 수집·이용 동의 후 본인확인",
+        "조회된 본인확인 내역에서 탈퇴 대상 사이트를 선택해 신청"
+      ],
+      "prerequisites": [
+        "본인확인(휴대폰 등) 이력이 있는 사이트만 목록에 나타남",
+        "휴대폰 인증 내역은 최근 1년 등 수단별 lookback 제한이 있음",
+        "ID/PW만 쓰는 사이트·금전적 불이익 사이트는 대행 불가할 수 있음"
+      ],
+      "identity_verification": "공동인증서·아이핀·휴대폰·신용카드·SNS 등 본인확인",
+      "grace_period": "신청 후 처리 결과 회신(대행 릴레이)",
+      "official_source_url": "https://www.privacy.go.kr/front/contents/cntntsView.do?contsNo=192",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    }
+  ]
+}

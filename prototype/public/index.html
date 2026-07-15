@@ -93,6 +93,97 @@
         padding: 4px 8px;
         font-size: 12px;
       }
+      .not-mine-btn {
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+      .guide-open-btn {
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+      .guide-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 40px 16px;
+      }
+      .guide-modal.hidden {
+        display: none !important;
+      }
+      .guide-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+      }
+      .guide-dialog {
+        position: relative;
+        z-index: 1;
+        background: #fff;
+        border: 1px solid #ccc;
+        max-width: 640px;
+        width: 100%;
+        max-height: calc(100vh - 80px);
+        overflow: auto;
+        padding: 16px 18px 20px;
+      }
+      .guide-dialog-top {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .guide-close {
+        border: none;
+        background: transparent;
+        font-size: 22px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0 4px;
+      }
+      .guide-section {
+        margin: 16px 0;
+      }
+      .guide-section h3 {
+        margin: 0 0 8px;
+        font-size: 15px;
+      }
+      .guide-meta {
+        color: #555;
+        font-size: 13px;
+      }
+      .guide-badge {
+        display: inline-block;
+        font-size: 12px;
+        padding: 1px 6px;
+        border: 1px solid #bbb;
+        margin-right: 4px;
+      }
+      .guide-badge-verified {
+        border-color: #2a7;
+        color: #176;
+      }
+      .guide-badge-stale {
+        border-color: #c80;
+        color: #940;
+      }
+      .guide-badge-inferred,
+      .guide-badge-unchecked {
+        border-color: #999;
+        color: #555;
+      }
+      .guide-stale-note {
+        color: #940;
+        font-size: 13px;
+      }
+      .guide-template {
+        white-space: pre-wrap;
+        background: #f7f7f7;
+        border: 1px solid #e0e0e0;
+        padding: 10px;
+        font-size: 13px;
+        overflow-x: auto;
+      }
     </style>
   </head>
   <body>
@@ -132,6 +223,8 @@
             <th>증거</th>
             <th>최근 증거</th>
             <th>건수</th>
+            <th>탈퇴</th>
+            <th>내 계정 아님</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
@@ -153,6 +246,25 @@
             <tbody id="hiddenRows"></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <div
+      id="guideModal"
+      class="guide-modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="guideTitle"
+      aria-hidden="true"
+    >
+      <div id="guideBackdrop" class="guide-backdrop"></div>
+      <div class="guide-dialog">
+        <div class="guide-dialog-top">
+          <button type="button" id="guideClose" class="guide-close" aria-label="닫기">
+            ×
+          </button>
+        </div>
+        <div id="guideBody"></div>
       </div>
     </div>
 

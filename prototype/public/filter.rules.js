@@ -70,6 +70,18 @@ export const RELAY_DOMAINS = [
   "sendy.co.kr",
 ];
 
+/** Pure B2B payment processors observed in the pilot scan. Not consumer wallets (R3). */
+export const PAYMENT_GATEWAY_DOMAINS = [
+  "kcp.co.kr",
+  "nicepay.co.kr",
+  "kicc.co.kr",
+  "easypay.co.kr",
+  "mobilians.co.kr",
+  "inicis.com",
+  "tosspayments.com",
+  "payple.kr",
+];
+
 export const MACHINE_LOCALPART =
   /^(no-?reply|do-?not-?reply|notification|notice|alert|auto|mailer|system|admin|info|support|help|team|hello|contact|service|cs|master)([-_.].*)?$/i;
 
@@ -139,6 +151,7 @@ export const defaultRules = {
   PUBLIC_SUFFIXES,
   FREE_MAILBOX_DOMAINS,
   RELAY_DOMAINS,
+  PAYMENT_GATEWAY_DOMAINS,
   MACHINE_LOCALPART,
   SUBJECT_RULES,
   CATEGORY_PURCHASES,

@@ -22,13 +22,26 @@ const FAMILY_STRENGTH = {
   unknown: 0,
 };
 
+/** Trim, strip only surrounding quotes, unescape quoted-string, drop C0/C1 controls. */
+function cleanDisplayName(rawName) {
+  let s = String(rawName ?? "").trim();
+  // Surrounding pair only — a lone leading/trailing quote is part of the name (SOW 003 §5.1 #5).
+  if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+    s = s.slice(1, -1);
+    // RFC 5322 quoted-string escapes inside the pair
+    s = s.replace(/\\([\\"])/g, "$1");
+  }
+  s = s.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
+  return s.trim();
+}
+
 function parseFromHeader(raw = "") {
   const text = String(raw).trim();
   if (!text) return null;
 
   const angle = text.match(/^(.*)<([^>]+)>\s*$/);
   if (angle) {
-    const name = angle[1].replace(/^"|"$/g, "").trim();
+    const name = cleanDisplayName(angle[1]);
     const email = angle[2].trim().toLowerCase();
     return { name: name || email, email, raw: text };
   }
@@ -39,7 +52,7 @@ function parseFromHeader(raw = "") {
     return { name: email, email, raw: text };
   }
 
-  return { name: text, email: text.toLowerCase(), raw: text };
+  return { name: cleanDisplayName(text), email: text.toLowerCase(), raw: text };
 }
 
 function domainFromEmail(email) {
@@ -258,6 +271,7 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
   const self = String(selfEmail || "").trim().toLowerCase();
   const freeSet = new Set(rules.FREE_MAILBOX_DOMAINS);
   const relaySet = new Set(rules.RELAY_DOMAINS);
+  const paymentGatewaySet = new Set(rules.PAYMENT_GATEWAY_DOMAINS || []);
   const machineRe = rules.MACHINE_LOCALPART;
 
   /** @type {Map<string, any>} */
@@ -330,7 +344,19 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
     if (headers.autoSubmitted) svc.headerFeatures.autoSubmitted += 1;
   }
 
-  function linkFields(registrableDomain, hiddenRule) {
+  /**
+   * Optional catalog match upgrades the link to verified (SOW 002 R3).
+   * Matching itself stays outside the aggregator.
+   */
+  function linkFields(registrableDomain, hiddenRule, match = null) {
+    if (match) {
+      return {
+        siteUrl: match.url || null,
+        linkSafety: "verified",
+        linkBlockedBy: null,
+      };
+    }
+
     let linkBlockedBy = null;
     if (hiddenRule === "self") linkBlockedBy = "self";
     else if (hiddenRule === "relay_domain" || (registrableDomain && relaySet.has(registrableDomain))) {
@@ -359,6 +385,10 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
     }
     if (svc.registrableDomain === null || svc.registrableDomain === undefined) {
       return { verdict: "hidden", hiddenRule: "invalid_domain" };
+    }
+    // After self + invalid_domain, before personal_mailbox (SOW 003 R2).
+    if (paymentGatewaySet.has(svc.registrableDomain)) {
+      return { verdict: "hidden", hiddenRule: "payment_gateway" };
     }
     if (relaySet.has(svc.registrableDomain)) {
       return { verdict: "unresolved", hiddenRule: "relay_domain" };
@@ -445,7 +475,7 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
     };
   }
 
-  return { add, snapshot };
+  return { add, snapshot, linkFields };
 }
 
 export { parseFromHeader, domainFromEmail };

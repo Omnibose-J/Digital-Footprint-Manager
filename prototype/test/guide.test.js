@@ -1,0 +1,111 @@
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import {
+  maskAccount,
+  renderRequestTemplate,
+  renderGuideHtml,
+  CHECKLIST,
+  WARNINGS,
+} from "../public/guide.js";
+
+describe("guide template (E6)", () => {
+  it("masks account as so****@gmail.com shape", () => {
+    assert.equal(maskAccount("sobeolab@gmail.com"), "so****@gmail.com");
+    assert.equal(maskAccount("ab@x.com"), "ab****@x.com");
+  });
+
+  it("template contains service name + masked account and nothing else interpolated", () => {
+    const { subject, body, fullText } = renderRequestTemplate({
+      serviceName: "Spotify",
+      maskedAccount: "so****@gmail.com",
+    });
+    assert.match(subject, /Spotify/);
+    assert.match(subject, /so\*\*\*\*@gmail\.com/);
+    assert.equal(
+      subject,
+      "[회원탈퇴 및 개인정보 삭제 요청] Spotify / so****@gmail.com"
+    );
+    assert.ok(body.includes("회원탈퇴 및 개인정보 삭제"));
+    // No leftover placeholders
+    assert.ok(!fullText.includes("{서비스명}"));
+    assert.ok(!fullText.includes("{마스킹된 계정}"));
+    // Must not inject extra user data fields
+    assert.ok(!fullText.includes("password"));
+    assert.ok(!fullText.includes("주민"));
+  });
+});
+
+describe("guide modal render states (R4)", () => {
+  it("matched verified entry shows verified badge and catalog link", () => {
+    const html = renderGuideHtml({
+      candidate: {
+        displayName: "Spotify",
+        registrableDomain: "spotify.com",
+        linkSafety: "verified",
+      },
+      entry: {
+        display_name: "Spotify",
+        deletion_route: "self_service",
+        url: "https://www.spotify.com/kr-ko/account/close/",
+        steps: ["step-one"],
+        prerequisites: [],
+        grace_period: "7일",
+        last_verified_at: "2026-07-15",
+        official_source_url: "https://support.spotify.com/example",
+      },
+      stale: false,
+      serviceName: "Spotify",
+      maskedAccount: "so****@gmail.com",
+    });
+    assert.match(html, /verified/);
+    assert.match(html, /spotify\.com\/kr-ko\/account\/close/);
+    assert.match(html, /step-one/);
+  });
+
+  it("unmatched shows 공식 탈퇴 경로 미확인 plus checklist/warnings/template", () => {
+    const html = renderGuideHtml({
+      candidate: {
+        displayName: "Unknown Shop",
+        registrableDomain: "unknown-shop.co.kr",
+        linkSafety: "inferred",
+      },
+      entry: null,
+      stale: false,
+      serviceName: "Unknown Shop",
+      maskedAccount: "so****@gmail.com",
+    });
+    assert.match(html, /공식 탈퇴 경로 미확인/);
+    assert.ok(!html.includes("공식 경로 없음(검증됨)"));
+    for (const item of CHECKLIST) {
+      assert.ok(html.includes(item), `missing checklist: ${item}`);
+    }
+    for (const w of WARNINGS) {
+      assert.ok(html.includes(w), `missing warning`);
+    }
+    assert.match(html, /Unknown Shop/);
+    assert.match(html, /so\*\*\*\*@gmail\.com/);
+  });
+
+  it("stale matched entry surfaces 검토 필요", () => {
+    const html = renderGuideHtml({
+      candidate: {
+        displayName: "Spotify",
+        registrableDomain: "spotify.com",
+        linkSafety: "verified",
+      },
+      entry: {
+        display_name: "Spotify",
+        deletion_route: "self_service",
+        url: "https://www.spotify.com/kr-ko/account/close/",
+        steps: [],
+        prerequisites: [],
+        last_verified_at: "2025-01-01",
+      },
+      stale: true,
+      serviceName: "Spotify",
+      maskedAccount: "so****@gmail.com",
+    });
+    assert.match(html, /검토 필요/);
+    assert.match(html, /2025-01-01/);
+  });
+});

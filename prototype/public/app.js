@@ -1,22 +1,33 @@
 import { collectSenders } from "./scan.js";
 import { createAggregator } from "./filter.js";
+import { loadCatalog, upgradeSnapshot, isStale } from "./catalog.js";
+import { renderGuideHtml, renderRequestTemplate, maskAccount } from "./guide.js";
+import { applyUserVerdict } from "./verdict.js";
 
-const loginPanel = document.getElementById("loginPanel");
-const appPanel = document.getElementById("appPanel");
-const googleBtn = document.getElementById("googleBtn");
-const loginStatus = document.getElementById("loginStatus");
-const statusEl = document.getElementById("status");
-const progressEl = document.getElementById("progress");
-const meta = document.getElementById("meta");
-const err = document.getElementById("err");
-const rows = document.getElementById("rows");
-const hiddenToggle = document.getElementById("hiddenToggle");
-const hiddenBody = document.getElementById("hiddenBody");
-const hiddenRows = document.getElementById("hiddenRows");
-const linkNote = document.getElementById("linkNote");
-const scanBtn = document.getElementById("scan");
-const saveBtn = document.getElementById("save");
-const logoutBtn = document.getElementById("logout");
+function el(id) {
+  return document.getElementById(id);
+}
+
+const loginPanel = el("loginPanel");
+const appPanel = el("appPanel");
+const googleBtn = el("googleBtn");
+const loginStatus = el("loginStatus");
+const statusEl = el("status");
+const progressEl = el("progress");
+const meta = el("meta");
+const err = el("err");
+const rows = el("rows");
+const hiddenToggle = el("hiddenToggle");
+const hiddenBody = el("hiddenBody");
+const hiddenRows = el("hiddenRows");
+const linkNote = el("linkNote");
+const scanBtn = el("scan");
+const saveBtn = el("save");
+const logoutBtn = el("logout");
+const guideModal = el("guideModal");
+const guideBackdrop = el("guideBackdrop");
+const guideClose = el("guideClose");
+const guideBody = el("guideBody");
 
 const FAMILY_LABEL = {
   signup: "가입",
@@ -33,16 +44,29 @@ const RULE_LABEL = {
   invalid_domain: "유효하지 않은 도메인",
   relay_domain: "메일 중계 도메인",
   personal_mailbox: "개인 메일함",
+  payment_gateway: "결제대행사",
+  not_mine: "내 계정 아님",
 };
 
 let config = null;
 /** @type {{ services: any[], hidden: any[], unresolved: any[], stats: any } | null} */
 let lastSnapshot = null;
-/** Keys the user restored. Held outside the aggregator so each progress tick re-applies them. */
-const restoredKeys = new Set();
+/**
+ * key -> user's explicit verdict. Held outside the aggregator; re-applied on every render,
+ * because each progress tick hands us a fresh snapshot that knows nothing about user input.
+ * Session-only — a reload resets it (no persistence in this SOW).
+ */
+const userVerdict = new Map(); // 'candidate' | 'not_mine'
 let abortScan = null;
 let gmailAccessToken = null;
 let hiddenOpen = false;
+/** @type {any | null} */
+let catalog = null;
+/** @type {((domain: string|null, hiddenRule: string|null, match?: any|null) => any) | null} */
+let linkFieldsFn = null;
+/** @type {HTMLElement | null} */
+let guideTrigger = null;
+let sessionEmail = "";
 
 function escapeHtml(s) {
   return String(s)
@@ -71,40 +95,24 @@ function serviceCell(s) {
   return name;
 }
 
-/**
- * Move user-restored entries out of the excluded buckets. Runs on every render because
- * each progress tick hands us a fresh snapshot that knows nothing about restores.
- * Link fields are left untouched: restoring says "this is a service", not "this URL is right".
- */
-function applyRestores(snapshot) {
-  if (!snapshot || restoredKeys.size === 0) return snapshot;
-  const services = [...snapshot.services];
-  const withoutRestored = (bucket) =>
-    bucket.filter((s) => {
-      if (!restoredKeys.has(s.key)) return true;
-      services.push({ ...s, verdict: "candidate", hiddenRule: null });
-      return false;
-    });
+function deletionCell(s, index) {
+  const label =
+    s.linkSafety === "verified"
+      ? isStale(s.catalogEntry || {})
+        ? "탈퇴 (검토 필요)"
+        : "탈퇴"
+      : "탈퇴 안내";
+  return `<button type="button" class="guide-open-btn" data-guide="${index}">${label}</button>`;
+}
 
-  const hidden = withoutRestored(snapshot.hidden);
-  const unresolved = withoutRestored(snapshot.unresolved);
-  services.sort((a, b) => b.messageCount - a.messageCount);
-
-  return {
-    services,
-    hidden,
-    unresolved,
-    stats: {
-      ...snapshot.stats,
-      services: services.length,
-      hidden: hidden.length,
-      unresolved: unresolved.length,
-    },
-  };
+function withCatalog(rawSnapshot) {
+  const overridden = applyUserVerdict(rawSnapshot, userVerdict);
+  if (!catalog || !linkFieldsFn) return overridden;
+  return upgradeSnapshot(overridden, catalog, linkFieldsFn);
 }
 
 function renderSnapshot(rawSnapshot) {
-  const snapshot = applyRestores(rawSnapshot);
+  const snapshot = withCatalog(rawSnapshot);
   lastSnapshot = snapshot;
   const services = snapshot?.services || [];
   const excluded = [...(snapshot?.hidden || []), ...(snapshot?.unresolved || [])];
@@ -119,6 +127,8 @@ function renderSnapshot(rawSnapshot) {
           <td>${evidenceBadges(s.families)}</td>
           <td>${escapeHtml(s.lastSeenMonth || "—")}</td>
           <td>${s.messageCount}</td>
+          <td>${deletionCell(s, i)}</td>
+          <td><button type="button" class="not-mine-btn" data-not-mine="${i}">내 계정 아님</button></td>
         </tr>`
     )
     .join("");
@@ -164,6 +174,7 @@ function setLoggedInUI(me) {
   appPanel.classList.remove("hidden");
   statusEl.textContent = `로그인됨: ${me.name || me.email} (${me.email})`;
   loginStatus.textContent = "";
+  sessionEmail = me.email || "";
 }
 
 function setLoggedOutUI() {
@@ -176,11 +187,56 @@ function setLoggedOutUI() {
   hiddenRows.innerHTML = "";
   lastSnapshot = null;
   gmailAccessToken = null;
+  sessionEmail = "";
   saveBtn.disabled = true;
   linkNote.classList.add("hidden");
   hiddenBody.classList.add("hidden");
   hiddenOpen = false;
   hiddenToggle.textContent = "제외된 발신자 0개 보기";
+  closeGuide();
+}
+
+function openGuide(candidate, trigger) {
+  if (!candidate || !guideModal || !guideBody) return;
+  guideTrigger = trigger || null;
+  const entry = candidate.catalogEntry || null;
+  const stale = entry ? isStale(entry) : false;
+  const serviceName = entry?.display_name || candidate.displayName || candidate.registrableDomain || "";
+  const masked = maskAccount(sessionEmail);
+  guideBody.innerHTML = renderGuideHtml({
+    candidate,
+    entry,
+    stale,
+    serviceName,
+    maskedAccount: masked,
+  });
+  guideModal.classList.remove("hidden");
+  guideModal.setAttribute("aria-hidden", "false");
+  guideClose?.focus();
+
+  const copyBtn = document.getElementById("guideCopyBtn");
+  copyBtn?.addEventListener("click", async () => {
+    const tpl = renderRequestTemplate({ serviceName, maskedAccount: masked });
+    try {
+      await navigator.clipboard.writeText(tpl.fullText);
+      copyBtn.textContent = "복사됨";
+      setTimeout(() => {
+        copyBtn.textContent = "템플릿 복사";
+      }, 1500);
+    } catch {
+      copyBtn.textContent = "복사 실패";
+    }
+  });
+}
+
+function closeGuide() {
+  if (!guideModal) return;
+  guideModal.classList.add("hidden");
+  guideModal.setAttribute("aria-hidden", "true");
+  if (guideBody) guideBody.innerHTML = "";
+  const trigger = guideTrigger;
+  guideTrigger = null;
+  if (trigger && typeof trigger.focus === "function") trigger.focus();
 }
 
 async function refreshMe() {
@@ -263,30 +319,59 @@ function requestGmailToken() {
   });
 }
 
-hiddenToggle.addEventListener("click", () => {
+hiddenToggle?.addEventListener("click", () => {
   hiddenOpen = !hiddenOpen;
-  hiddenBody.classList.toggle("hidden", !hiddenOpen);
+  hiddenBody?.classList.toggle("hidden", !hiddenOpen);
 });
 
-hiddenRows.addEventListener("click", (ev) => {
+hiddenRows?.addEventListener("click", (ev) => {
   const btn = ev.target.closest("[data-restore]");
   if (!btn || !lastSnapshot) return;
   const idx = Number(btn.getAttribute("data-restore"));
   const item = [...lastSnapshot.hidden, ...lastSnapshot.unresolved][idx];
-  if (!item) return;
+  if (!item?.key) return;
 
-  restoredKeys.add(item.key);
+  userVerdict.set(item.key, "candidate");
   renderSnapshot(lastSnapshot);
 });
 
-scanBtn.addEventListener("click", async () => {
+rows?.addEventListener("click", (ev) => {
+  const notMineBtn = ev.target.closest("[data-not-mine]");
+  if (notMineBtn && lastSnapshot) {
+    const idx = Number(notMineBtn.getAttribute("data-not-mine"));
+    const item = lastSnapshot.services[idx];
+    if (!item?.key) return;
+    userVerdict.set(item.key, "not_mine");
+    renderSnapshot(lastSnapshot);
+    return;
+  }
+
+  const btn = ev.target.closest("[data-guide]");
+  if (!btn || !lastSnapshot) return;
+  const idx = Number(btn.getAttribute("data-guide"));
+  const item = lastSnapshot.services[idx];
+  if (!item) return;
+  openGuide(item, btn);
+});
+
+guideClose?.addEventListener("click", () => closeGuide());
+guideBackdrop?.addEventListener("click", () => closeGuide());
+{
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && guideModal && !guideModal.classList.contains("hidden")) {
+      closeGuide();
+    }
+  });
+}
+
+scanBtn?.addEventListener("click", async () => {
   err.textContent = "";
   meta.textContent = "";
   progressEl.textContent = "Gmail 권한 요청 중…";
   rows.innerHTML = "";
   hiddenRows.innerHTML = "";
   lastSnapshot = null;
-  restoredKeys.clear();
+  userVerdict.clear();
   scanBtn.disabled = true;
   saveBtn.disabled = true;
   linkNote.classList.add("hidden");
@@ -302,6 +387,7 @@ scanBtn.addEventListener("click", async () => {
     let aggregator = null;
     const meData = await fetch("/api/me").then((r) => r.json());
     aggregator = createAggregator({ selfEmail: meData.email || "" });
+    linkFieldsFn = aggregator.linkFields;
 
     const result = await collectSenders(gmailAccessToken, {
       maxMessages: config.maxMessages,
@@ -318,6 +404,7 @@ scanBtn.addEventListener("click", async () => {
           aggregator.snapshot().stats.messages === 0
         ) {
           aggregator = createAggregator({ selfEmail: p.account });
+          linkFieldsFn = aggregator.linkFields;
         }
         const snap = aggregator.snapshot();
         renderSnapshot(snap);
@@ -351,7 +438,7 @@ scanBtn.addEventListener("click", async () => {
   }
 });
 
-saveBtn.addEventListener("click", async () => {
+saveBtn?.addEventListener("click", async () => {
   err.textContent = "";
   const services = lastSnapshot?.services || [];
   // Fold by domain: free-mailbox rescues are per-address, so two candidates can share
@@ -377,7 +464,7 @@ saveBtn.addEventListener("click", async () => {
   }
 });
 
-logoutBtn.addEventListener("click", async () => {
+logoutBtn?.addEventListener("click", async () => {
   if (abortScan) abortScan.abort();
   if (gmailAccessToken && window.google?.accounts?.oauth2) {
     try {
@@ -396,13 +483,25 @@ async function boot() {
   config = await cfgRes.json();
   if (!cfgRes.ok) throw new Error(config.error || "config failed");
 
+  try {
+    catalog = await loadCatalog();
+  } catch (e) {
+    console.warn("catalog load failed", e);
+    catalog = { version: "missing", services: [] };
+  }
+
+  // linkFields needs an aggregator instance; create a throwaway for boot-time upgrades.
+  linkFieldsFn = createAggregator({ selfEmail: "" }).linkFields;
+
   await waitForGis();
   renderGoogleButton();
   await refreshMe();
 }
 
-boot().catch((e) => {
-  const msg = String(e.message || e);
-  err.textContent = msg;
-  loginStatus.textContent = msg;
-});
+if (loginPanel) {
+  boot().catch((e) => {
+    const msg = String(e.message || e);
+    if (err) err.textContent = msg;
+    if (loginStatus) loginStatus.textContent = msg;
+  });
+}

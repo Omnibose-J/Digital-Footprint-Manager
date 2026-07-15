@@ -5,7 +5,10 @@ import {
   classifyMessage,
   createAggregator,
   registrableDomainFromHost,
+  parseFromHeader,
 } from "../public/filter.js";
+import { applyUserVerdict } from "../public/verdict.js";
+import { PAYMENT_GATEWAY_DOMAINS } from "../public/filter.rules.js";
 
 function msg({
   from,
@@ -210,5 +213,131 @@ describe("R6 aggregation + D1/D3/D6", () => {
     assert.equal(snap.hidden.length, 1);
     assert.equal(snap.hidden[0].hiddenRule, "invalid_domain");
     assert.equal(snap.hidden[0].registrableDomain, null);
+  });
+});
+
+describe("SOW 003 R1 display-name repair", () => {
+  it('quoted Korean name loses trailing quote', () => {
+    const p = parseFromHeader('"삼성전자스토어" <no-reply@samsung.com>');
+    assert.equal(p.name, "삼성전자스토어");
+    assert.equal(normalizeSender('"삼성전자스토어" <no-reply@samsung.com>').displayName, "삼성전자스토어");
+  });
+
+  it("ASCII display name unchanged", () => {
+    assert.equal(parseFromHeader("Google <no-reply@google.com>").name, "Google");
+  });
+
+  it("bare address unchanged", () => {
+    assert.equal(parseFromHeader("no-reply@goodnotes.com").name, "no-reply@goodnotes.com");
+  });
+
+  it("quoted-string escape unwrapped", () => {
+    assert.equal(parseFromHeader('"O\\"Brien" <a@x.com>').name, 'O"Brien');
+  });
+
+  it("lone leading quote is preserved", () => {
+    assert.equal(parseFromHeader('"unbalanced <a@x.com>').name, '"unbalanced');
+  });
+
+  it("control characters stripped from display name", () => {
+    const raw = `"Acme\u0007Corp" <a@acme.com>`;
+    assert.equal(parseFromHeader(raw).name, "AcmeCorp");
+  });
+});
+
+describe("SOW 003 R2/R3 payment gateway", () => {
+  it("noreply@kcp.co.kr is hidden as payment_gateway", () => {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(msg({ from: "KCP <noreply@kcp.co.kr>", subject: "결제 영수증" }));
+    const snap = agg.snapshot();
+    assert.equal(snap.services.length, 0);
+    assert.equal(snap.hidden.length, 1);
+    assert.equal(snap.hidden[0].hiddenRule, "payment_gateway");
+    assert.ok(snap.hidden[0].hiddenRule, "ruleId present (D2)");
+  });
+
+  it("payco.com with signup stays candidate (R3)", () => {
+    assert.ok(!PAYMENT_GATEWAY_DOMAINS.includes("payco.com"));
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(
+      msg({
+        from: "PAYCO <noreply@payco.com>",
+        subject: "회원가입이 완료되었습니다",
+      })
+    );
+    const snap = agg.snapshot();
+    assert.equal(snap.services.length, 1);
+    assert.equal(snap.services[0].registrableDomain, "payco.com");
+    assert.equal(snap.services[0].verdict, "candidate");
+  });
+
+  it("payment_gateway appears in snapshot().hidden with ruleId (D2)", () => {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    for (const domain of ["nicepay.co.kr", "tosspayments.com"]) {
+      agg.add(msg({ from: `PG <n@${domain}>`, subject: "receipt" }));
+    }
+    const snap = agg.snapshot();
+    assert.ok(snap.hidden.length >= 2);
+    for (const h of snap.hidden) {
+      assert.equal(h.hiddenRule, "payment_gateway");
+      assert.equal(h.verdict, "hidden");
+    }
+  });
+});
+
+describe("SOW 003 R4 applyUserVerdict", () => {
+  function seededSnapshot() {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(
+      msg({
+        from: "Brand <hello@brand-shop.com>",
+        subject: "회원가입이 완료되었습니다",
+      })
+    );
+    agg.add(msg({ from: "KCP <noreply@kcp.co.kr>", subject: "영수증" }));
+    return agg.snapshot();
+  }
+
+  it("not_mine moves candidate to excluded with reason 내 계정 아님", () => {
+    const snap = seededSnapshot();
+    const target = snap.services.find((s) => s.registrableDomain === "brand-shop.com");
+    assert.ok(target);
+    const verdicts = new Map([[target.key, "not_mine"]]);
+    const out = applyUserVerdict(snap, verdicts);
+    assert.ok(!out.services.some((s) => s.key === target.key));
+    const excluded = out.hidden.find((s) => s.key === target.key);
+    assert.ok(excluded);
+    assert.equal(excluded.hiddenRule, "not_mine");
+  });
+
+  it("candidate override round-trips not_mine back to services", () => {
+    const snap = seededSnapshot();
+    const key = snap.services.find((s) => s.registrableDomain === "brand-shop.com").key;
+    const mid = applyUserVerdict(snap, new Map([[key, "not_mine"]]));
+    const back = applyUserVerdict(mid, new Map([[key, "candidate"]]));
+    assert.ok(back.services.some((s) => s.key === key));
+    assert.ok(!back.hidden.some((s) => s.key === key));
+  });
+
+  it("not_mine survives a fresh snapshot (progress tick)", () => {
+    const snap1 = seededSnapshot();
+    const key = snap1.services.find((s) => s.registrableDomain === "brand-shop.com").key;
+    const verdicts = new Map([[key, "not_mine"]]);
+    applyUserVerdict(snap1, verdicts);
+
+    const snap2 = seededSnapshot(); // fresh tick — aggregator knows nothing
+    const out = applyUserVerdict(snap2, verdicts);
+    assert.ok(!out.services.some((s) => s.key === key));
+    assert.ok(out.hidden.some((s) => s.key === key && s.hiddenRule === "not_mine"));
+  });
+
+  it("save payload omits not_mine domains", () => {
+    const snap = seededSnapshot();
+    const target = snap.services.find((s) => s.registrableDomain === "brand-shop.com");
+    const out = applyUserVerdict(snap, new Map([[target.key, "not_mine"]]));
+    const domains = out.services
+      .filter((s) => s.registrableDomain)
+      .map((s) => s.registrableDomain);
+    assert.ok(!domains.includes("brand-shop.com"));
   });
 });
