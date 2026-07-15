@@ -4,6 +4,46 @@ Problems found while doing other work, verified, and deliberately not fixed ther
 says why it could not be solved at the time and what it costs to leave. Delete an entry when it
 is fixed, not when it is noticed.
 
+## gmail.readonly is broader than what the code currently does (2026-07-16, needs a decision)
+
+A security audit called this High and it is half right. We request `gmail.readonly`, whose consent
+string is "View your email messages and settings", while the scan only ever calls
+`messages.list` with no `q` and `messages.get` with `format=metadata`. Everything we do today fits
+`gmail.metadata`, which cannot read bodies at all. A stolen token today can read bodies; nothing in
+the product needs that.
+
+The audit's fix does not follow from it. Spec line 79: `messages.list(q=...)` **cannot use
+`gmail.metadata`**, and `q=` is the entire reason `gmail.readonly` was chosen. Downgrading
+permanently forecloses the architecture §3 prescribes and the entry below estimates, including
+`q=category:purchases`, which no other route reaches. Note `gmail.metadata` is restricted too, so
+downgrading buys blast radius, not an easier verification.
+
+So this is not "narrow the scope", it is **use it or give it up**, and both branches are real:
+- Build the family-query scan (entry below). The scope becomes justified, and restricted-scope
+  verification has an answer to "why not metadata".
+- Or downgrade to `gmail.metadata` now and re-consent later if the queries ever get built. One
+  re-consent, and until then the token cannot read a body even if it leaks.
+
+**Blast radius of doing nothing:** an over-broad grant a reviewer will ask about, and a token whose
+theft is worse than it needs to be. The theft path is narrow (the token lives in a variable, never
+reaches a cookie or our server, and the CSP is strict), which is why this is not being decided at
+2am.
+
+## uuid advisory in the auth path is unreachable (2026-07-16, verified, not fixed)
+
+`npm audit --omit=dev` is red: GHSA-w5hq-g745-h8pq, `google-auth-library` -> `gaxios@6.7.1` ->
+`uuid@9.0.1`. The advisory is a missing buffer bounds check **in v3/v5/v6, and only when `buf` is
+provided**. gaxios imports uuid once, at `build/src/gaxios.js:417`, and calls `v4()` with no
+arguments, to make a multipart boundary. The vulnerable code cannot be reached from this tree.
+
+Not fixed, deliberately. The only lever is an `overrides` entry forcing uuid to ^11 underneath
+`google-auth-library`, which is the library `verifyIdToken` and therefore the entire login depends
+on. No test covers that path, because it needs a real Google token, so a break would ship silently.
+Taking a real risk to the auth library to silence an unreachable advisory is the wrong trade.
+
+**Resolves itself** when google-auth-library bumps gaxios. Re-check then; if it lingers, revisit
+with a way to test verifyIdToken first, not by overriding blind.
+
 ## The scan pays for gmail.readonly and does not use it (2026-07-15, designed not built)
 
 `scan.js` calls `messages.list` with no `q`. It enumerates the whole mailbox, fetches every

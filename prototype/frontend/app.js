@@ -66,6 +66,8 @@ let catalog = null;
 /** @type {HTMLElement | null} */
 let guideTrigger = null;
 let sessionEmail = "";
+/** The Gmail account the scan actually read, from users/me/profile. Not sessionEmail. */
+let scannedAccount = "";
 
 function serviceCell(s) {
   const name = escapeHtml(s.displayName || s.registrableDomain || "");
@@ -254,6 +256,7 @@ function setLoggedOutUI() {
   lastSnapshot = null;
   gmailAccessToken = null;
   sessionEmail = "";
+  scannedAccount = "";
   linkNote.classList.add("hidden");
   hiddenBody.classList.add("hidden");
   hiddenOpen = false;
@@ -267,7 +270,9 @@ function openGuide(candidate, trigger) {
   const entry = candidate.catalogEntry || null;
   const stale = entry ? isStale(entry) : false;
   const serviceName = entry?.display_name || candidate.displayName || candidate.registrableDomain || "";
-  const masked = maskAccount(sessionEmail);
+  // The scanned mailbox, not the signed-in one. Falls back to the session only before a scan
+  // has run, which is the only moment the two cannot disagree.
+  const masked = maskAccount(scannedAccount || sessionEmail);
   guideBody.innerHTML = renderGuideHtml({
     candidate,
     entry,
@@ -371,6 +376,10 @@ function requestGmailToken() {
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: config.clientId,
       scope: config.gmailScope,
+      // Point the chooser at the account they signed in as. It is a hint, not a constraint: the
+      // user can still pick another, which is why the scanned address is read back from the Gmail
+      // profile and the request template is built from that rather than from this.
+      login_hint: sessionEmail || undefined,
       callback: (resp) => {
         if (resp.error) {
           reject(new Error(resp.error_description || resp.error));
@@ -460,6 +469,12 @@ scanBtn?.addEventListener("click", async () => {
       signal: abortScan.signal,
       onProfile: ({ account }) => {
         aggregator = createAggregator({ selfEmail: account || "" });
+        // The mailbox we actually read, which is not necessarily the one signed into the product.
+        // The Gmail token comes from a separate consent that offers its own account chooser, so a
+        // multi-account user can sign in as one and scan another. SOW 005 R7 already established
+        // that the aggregator must trust this address over /api/me; the request template is the
+        // second consumer of the same fact and was still trusting the session.
+        scannedAccount = account || "";
       },
       onMessage: (message) => aggregator.add(message),
       onProgress: (p) => {

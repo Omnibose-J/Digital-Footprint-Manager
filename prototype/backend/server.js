@@ -185,14 +185,33 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+/**
+ * SameSite=Lax already blocks the cookie on a cross-site POST, so a forged logout cannot carry the
+ * session and the state-changing part is inert. It still returns 200 and a clearing Set-Cookie,
+ * which is noise a same-origin check removes for the cost of four lines.
+ *
+ * Only the mutating routes get this. A browser omits Origin on same-origin GETs, so demanding it
+ * everywhere would break the reads.
+ */
+function isSameOrigin(req) {
+  const origin = req.get("origin");
+  if (!origin) return true; // non-CORS clients (curl, the launcher) send none
+  try {
+    return new URL(origin).host === req.get("host");
+  } catch {
+    return false;
+  }
+}
+
 app.post("/api/auth/logout", (req, res) => {
+  if (!isSameOrigin(req)) {
+    res.status(403).json({ error: "cross-origin" });
+    return;
+  }
   clearSessionCookie(req, res);
   res.json({ ok: true });
 });
 
-/**
- * Save approved candidate domains only (never full sender addresses / Gmail tokens).
- */
 app.use(express.static(publicDir));
 
 // On Vercel the platform invokes the exported app; binding a port there would hang the build.
