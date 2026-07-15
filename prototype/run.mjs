@@ -43,11 +43,32 @@ function isPortOpen(port) {
   });
 }
 
+/**
+ * Port open ≠ DFM healthy. After public/ → frontend/ renames, a leftover
+ * `src/server.js` still answers /api/* but serves 404 for /. Treating that as
+ * "already running" opens a blank page and looks like the app is broken.
+ */
+async function isDfmUiHealthy(port) {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/`, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!res.ok) return false;
+    const type = res.headers.get("content-type") || "";
+    if (!type.includes("text/html")) return false;
+    const body = await res.text();
+    return body.includes("googleBtn") || body.includes("디지털 발자국");
+  } catch {
+    return false;
+  }
+}
+
 async function waitForPort(port, child, timeoutMs = 20000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) return false;
-    if (await isPortOpen(port)) return true;
+    if (await isDfmUiHealthy(port)) return true;
     await new Promise((r) => setTimeout(r, 250));
   }
   return false;
@@ -97,11 +118,21 @@ async function main() {
   const port = Number(env.PORT || 3456);
   const url = `http://localhost:${port}`;
 
-  // 2. Already running? Don't spawn a second server just to crash on EADDRINUSE.
+  // 2. Already running? Reuse only a healthy DFM UI — a dead static root is not "up".
   if (await isPortOpen(port)) {
-    console.log(`Server already running on ${url} — opening the browser.`);
-    openBrowser(url);
-    return;
+    if (await isDfmUiHealthy(port)) {
+      console.log(`Server already running on ${url} — opening the browser.`);
+      openBrowser(url);
+      return;
+    }
+    fail(
+      `Port ${port} is in use, but GET / is not the DFM UI (often an old ` +
+        `src/server.js left over after public/ → frontend/).\n\n` +
+        `  Stop the process holding ${port}, then run again.\n` +
+        `    Windows : Get-NetTCPConnection -LocalPort ${port} | Select OwningProcess\n` +
+        `              Stop-Process -Id <pid> -Force\n` +
+        `    macOS   : lsof -i :${port}   then   kill <pid>`
+    );
   }
 
   // 3. Dependencies.

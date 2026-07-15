@@ -253,9 +253,19 @@ app.use(express.static(publicDir));
 
 // On Vercel the platform invokes the exported app; binding a port there would hang the build.
 if (!process.env.VERCEL) {
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`DFM prototype: http://localhost:${port}`);
     console.log("Product login on server; Gmail scan stays in the browser.");
+  });
+  server.on("error", (err) => {
+    if (err && err.code === "EADDRINUSE") {
+      console.error(
+        `\n[FAILED] Port ${port} is already in use. Stop the other process, or set PORT in .env.\n` +
+          `  A leftover server that still answers /api but 404s / will look like the app is broken.\n`
+      );
+      process.exit(1);
+    }
+    throw err;
   });
 }
 
