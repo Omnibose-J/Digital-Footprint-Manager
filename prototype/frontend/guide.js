@@ -26,6 +26,33 @@ const TEMPLATE_BODY = [
 ].join("\n");
 
 /**
+ * A link into the user's own Gmail, pre-searched for this sender (§8).
+ *
+ * This is the whole answer to "where do I delete the mail". Deleting it from here would need
+ * gmail.modify, whose narrowest form also grants send-as-the-user, and no trash-only scope exists.
+ * So the product does what it does everywhere else: prepares, routes, explains, and lets the user
+ * act on the official surface. No new scope, nothing irreversible done by us, and Gmail's own
+ * delete UI is a better confirmation step than one we could build, with a 30-day trash behind it.
+ *
+ * `u/{email}` rather than `u/0`, because `u/0` is a positional index and opens whichever account
+ * the browser happens to have first. §8 asked for that to be verified before shipping; the address
+ * used is the one the scan actually read (users/me/profile), not the product session, so a
+ * multi-account user lands in the mailbox these results came from.
+ *
+ * @param {string} account the scanned Gmail address
+ * @param {string} domain registrable domain of the sender
+ * @returns {string|null} null when there is nothing safe to search for
+ */
+export function gmailSearchUrl(account, domain) {
+  const acct = String(account || "").trim();
+  const dom = String(domain || "").trim().toLowerCase();
+  if (!acct.includes("@") || !dom.includes(".")) return null;
+  return `https://mail.google.com/mail/u/${encodeURIComponent(acct)}/#search/${encodeURIComponent(
+    `from:${dom}`
+  )}`;
+}
+
+/**
  * Mask local-part keeping first two chars when long enough: so****@gmail.com
  * @param {string} email
  */
@@ -156,6 +183,7 @@ export function renderGuideHtml({
   stale,
   serviceName,
   maskedAccount,
+  scannedAccount,
 }) {
   const name = escapeHtml(serviceName || candidate.displayName || "");
   const domain = escapeHtml(candidate.registrableDomain || "");
@@ -186,6 +214,21 @@ export function renderGuideHtml({
   // only opens by default where sending it IS the withdrawal.
   const templateIsTheRoute = entry?.deletion_route === "email_request" || !entry;
 
+  // Only for a real service domain. A rescued free-mailbox sender keys on gmail.com, and
+  // "from:gmail.com" would hand the user a search matching most of their inbox and an invitation
+  // to delete it. linkBlockedBy is already the fence that says the domain is not the service.
+  const mailUrl = candidate?.linkBlockedBy
+    ? null
+    : gmailSearchUrl(scannedAccount, candidate?.registrableDomain);
+  const mailBlock = mailUrl
+    ? `<section class="guide-section">
+      <h3>탈퇴한 뒤 남은 메일</h3>
+      <p class="note">저희는 메일을 지울 수 없습니다. 지우려면 Google이 "이 앱이 회원님 이름으로 메일을 보낼 수 있도록 허용"까지 함께 요구하고, 휴지통 전용 권한은 존재하지 않습니다. 대신 본인 Gmail에서 이 발신자만 검색된 상태로 열어 드립니다.</p>
+      <p><a class="btn btn-quiet" href="${escapeHtml(mailUrl)}" target="_blank" rel="noopener noreferrer">Gmail에서 이 발신자 메일 보기</a></p>
+      <p class="note">탈퇴 확인 메일까지 지우면 재스캔했을 때 이 계정을 정리했다는 사실이 남지 않습니다.</p>
+    </section>`
+    : "";
+
   return `
     <div class="guide-header">
       <h2 id="guideTitle">${name}</h2>
@@ -195,6 +238,7 @@ export function renderGuideHtml({
     ${prereqBlockHtml(entry)}
     ${routeBlockHtml(entry)}
     ${identity}
+    ${mailBlock}
     <details class="guide-fold"${templateIsTheRoute ? " open" : ""}>
       <summary>개인정보 삭제 요청문 (복사해서 보내세요)</summary>
       <pre class="guide-template" id="guideTemplateText">${escapeHtml(template.fullText)}</pre>

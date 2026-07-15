@@ -308,6 +308,8 @@ function openGuide(candidate, trigger) {
     stale,
     serviceName,
     maskedAccount: masked,
+    // The mailbox the scan read, so the Gmail link opens the account these results came from.
+    scannedAccount,
   });
   guideModal.classList.remove("hidden");
   guideModal.setAttribute("aria-hidden", "false");

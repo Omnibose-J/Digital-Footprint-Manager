@@ -4,6 +4,7 @@ import {
   maskAccount,
   renderRequestTemplate,
   renderGuideHtml,
+  gmailSearchUrl,
 } from "../frontend/guide.js";
 
 describe("guide template (E6)", () => {
@@ -240,5 +241,73 @@ describe("the guide leads with what is specific to this service", () => {
     const html = render({ prerequisites: ["<img src=x onerror=alert(1)>"] });
     assert.doesNotMatch(html, /<img src=x/);
     assert.match(html, /&lt;img/);
+  });
+});
+
+describe("the Gmail deep link, which is the whole answer to 'where do I delete the mail'", () => {
+  it("opens the scanned mailbox by address, not by index", () => {
+    // u/0 is positional and opens whichever account the browser has first. §8 asked for this
+    // specifically, because a multi-account user would land in the wrong inbox and delete from it.
+    const url = gmailSearchUrl("beomjin1@g.skku.edu", "coupang.com");
+    assert.ok(url.startsWith("https://mail.google.com/mail/u/"));
+    assert.ok(url.includes(encodeURIComponent("beomjin1@g.skku.edu")));
+    assert.ok(!url.includes("/u/0/"));
+    assert.ok(url.includes(encodeURIComponent("from:coupang.com")));
+  });
+
+  it("refuses to build a link it cannot aim", () => {
+    assert.equal(gmailSearchUrl("", "coupang.com"), null);
+    assert.equal(gmailSearchUrl("not-an-address", "coupang.com"), null);
+    assert.equal(gmailSearchUrl("a@b.com", ""), null);
+    assert.equal(gmailSearchUrl("a@b.com", "localhost"), null);
+  });
+
+  it("never offers it for a free-mailbox sender", () => {
+    // A rescued 성균관대 SW사업단 keys on gmail.com. "from:gmail.com" is a search matching most of
+    // the inbox, handed over with an invitation to delete.
+    const html = renderGuideHtml({
+      candidate: {
+        displayName: "성균관대학교 SW전문인재양성사업단",
+        registrableDomain: "gmail.com",
+        linkSafety: "none",
+        linkBlockedBy: "free_mailbox",
+      },
+      entry: null,
+      stale: false,
+      serviceName: "성균관대학교 SW전문인재양성사업단",
+      maskedAccount: "be****@g.skku.edu",
+      scannedAccount: "beomjin1@g.skku.edu",
+    });
+    assert.doesNotMatch(html, /mail\.google\.com/);
+    assert.doesNotMatch(html, /탈퇴한 뒤 남은 메일/);
+  });
+
+  it("offers it for a real service domain, and says why we cannot do it ourselves", () => {
+    const html = renderGuideHtml({
+      candidate: { displayName: "쿠팡", registrableDomain: "coupang.com", linkSafety: "verified" },
+      entry: { deletion_route: "self_service", url: "https://x", steps: [], last_verified_at: "2026-07-15" },
+      stale: false,
+      serviceName: "쿠팡",
+      maskedAccount: "be****@g.skku.edu",
+      scannedAccount: "beomjin1@g.skku.edu",
+    });
+    assert.match(html, /탈퇴한 뒤 남은 메일/);
+    assert.match(html, /mail\.google\.com/);
+    // The refusal is explained where it applies, not buried in a spec file.
+    assert.match(html, /이름으로 메일을 보낼 수 있도록 허용/);
+    // And the cost of over-deleting: the evidence is the only record the account existed.
+    assert.match(html, /재스캔했을 때/);
+  });
+
+  it("is skipped when no scan has run, rather than guessing the mailbox", () => {
+    const html = renderGuideHtml({
+      candidate: { displayName: "쿠팡", registrableDomain: "coupang.com", linkSafety: "verified" },
+      entry: { deletion_route: "self_service", url: "https://x", steps: [], last_verified_at: "2026-07-15" },
+      stale: false,
+      serviceName: "쿠팡",
+      maskedAccount: "be****@g.skku.edu",
+      scannedAccount: "",
+    });
+    assert.doesNotMatch(html, /mail\.google\.com/);
   });
 });
