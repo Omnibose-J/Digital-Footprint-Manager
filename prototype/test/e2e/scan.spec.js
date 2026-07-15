@@ -366,10 +366,19 @@ test.describe("the scan a user actually sees", () => {
     );
     expect(scan).toBeTruthy();
 
-    // Vercel has no catalog entry; Spotify, GitHub and 옥션 do. The count is what the removed
-    // button used to report by being clicked.
-    expect(scan.no_route).toBeGreaterThan(0);
-    expect(scan.candidates).toBeGreaterThanOrEqual(scan.no_route);
+    // The exact number, because the loose version of this (>0, and <= candidates) passed while
+    // no_route was counting the pre-catalog snapshot and could only ever equal candidates. On the
+    // real mailbox that shipped as 63 of 63 with four 탈퇴 buttons on screen.
+    //
+    // Of the four candidates: Spotify, GitHub and 옥션 are catalogued, Vercel is not, and 옥션 is
+    // likely_closed so it is out of the count entirely. That leaves exactly Vercel.
+    expect(scan.candidates).toBe(4);
+    expect(scan.no_route).toBe(1);
+
+    // And it must track the catalog, not the row count: the number of rows offering a 탈퇴 button
+    // plus the ones we have no route for has to account for every row we did not call closed.
+    const routed = await page.locator("#rows tr", { hasText: "경로 미확인" }).count();
+    expect(routed).toBe(scan.no_route);
 
     // The boundary, asserted against the real event and not a hand-built one: every value that
     // leaves is a number, a boolean, or a string we wrote ourselves. A domain reaching GA is the

@@ -614,8 +614,14 @@ scanBtn?.addEventListener("click", async () => {
       // one signal telling us which routes users reach for and we lack; removing that button to
       // stop promising an answer we do not have also removed the way to count the demand. This is
       // our catalog's miss rate, not a fact about their mailbox, so it belongs in the same event.
-      no_route: finalSnap.services.filter((s) => !s.likelyClosed && s.linkSafety !== "verified")
-        .length,
+      //
+      // lastSnapshot, not finalSnap: linkSafety only becomes "verified" inside withCatalog, which
+      // renderSnapshot applies and stores here. Counting the raw aggregator snapshot marked every
+      // row uncatalogued, so this reported 63 of 63 on a mailbox with four catalogued services —
+      // a number that could never be anything but `candidates`.
+      no_route: (lastSnapshot?.services || []).filter(
+        (s) => !s.likelyClosed && s.linkSafety !== "verified"
+      ).length,
     });
 
     console.info("[dfm] scan", {
