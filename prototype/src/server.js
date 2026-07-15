@@ -1,6 +1,5 @@
 import "dotenv/config";
 import express from "express";
-import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { OAuth2Client } from "google-auth-library";
@@ -11,10 +10,6 @@ const port = Number(process.env.PORT || 3456);
 const clientId = process.env.GOOGLE_CLIENT_ID || "";
 const concurrency = Number(process.env.GMAIL_CONCURRENCY || 12);
 const maxMessages = Number(process.env.GMAIL_MAX_MESSAGES || 0);
-
-/** Product sessions only — never store Gmail tokens here */
-/** @type {Map<string, { sub: string, email: string, name: string, picture?: string, createdAt: number }>} */
-const sessions = new Map();
 
 /** Approved candidate domains per user sub (no full sender addresses) */
 /** @type {Map<string, { domains: Array<{ domain: string, count: number }>, savedAt: string }>} */
@@ -36,28 +31,58 @@ function parseCookies(req) {
   return out;
 }
 
-function getSession(req) {
-  const sid = parseCookies(req).dfm_sid;
-  if (!sid) return null;
-  return sessions.get(sid) || null;
+/**
+ * The session IS the verified Google ID token, held in an HttpOnly cookie and re-verified
+ * per request. Stateless on purpose: serverless instances do not share memory, so a
+ * server-side session map logs the user out at random. An ID token asserts identity only
+ * and carries no Gmail scope, so this cookie still grants no mailbox access.
+ */
+async function getSession(req) {
+  const idToken = parseCookies(req).dfm_idt;
+  if (!idToken || !oauthClient) return null;
+  try {
+    const ticket = await oauthClient.verifyIdToken({ idToken, audience: clientId });
+    const payload = ticket.getPayload();
+    if (!payload?.sub || !payload.email) return null;
+    return {
+      sub: payload.sub,
+      email: payload.email,
+      name: payload.name || payload.email,
+      picture: payload.picture,
+    };
+  } catch {
+    // Expired or tampered token means "not signed in" — the defined outcome, not an error.
+    return null;
+  }
 }
 
-function setSessionCookie(res, sid) {
-  res.setHeader(
-    "Set-Cookie",
-    `dfm_sid=${encodeURIComponent(sid)}; Path=/; HttpOnly; SameSite=Lax`
-  );
+function isHttps(req) {
+  return String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() === "https";
 }
 
-function clearSessionCookie(res) {
-  res.setHeader(
-    "Set-Cookie",
-    "dfm_sid=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"
-  );
+function sessionCookie(req, value, maxAge) {
+  const parts = [
+    `dfm_idt=${value}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${maxAge}`,
+  ];
+  if (isHttps(req)) parts.push("Secure");
+  return parts.join("; ");
 }
 
-function requireSession(req, res) {
-  const session = getSession(req);
+function setSessionCookie(req, res, idToken) {
+  // Expiry rides on the ID token's own exp; the cookie is just the carrier.
+  res.setHeader("Set-Cookie", sessionCookie(req, idToken, 3600));
+}
+
+function clearSessionCookie(req, res) {
+  res.setHeader("Set-Cookie", sessionCookie(req, "", 0));
+}
+
+async function requireSession(req, res) {
+  const session = await getSession(req);
   if (!session) {
     res.status(401).json({ error: "로그인이 필요합니다." });
     return null;
@@ -88,8 +113,8 @@ app.get("/api/config", (_req, res) => {
   });
 });
 
-app.get("/api/me", (req, res) => {
-  const session = getSession(req);
+app.get("/api/me", async (req, res) => {
+  const session = await getSession(req);
   if (!session) {
     res.json({ loggedIn: false });
     return;
@@ -125,15 +150,7 @@ app.post("/api/auth/login", async (req, res) => {
       return;
     }
 
-    const sid = crypto.randomUUID();
-    sessions.set(sid, {
-      sub: payload.sub,
-      email: payload.email,
-      name: payload.name || payload.email,
-      picture: payload.picture,
-      createdAt: Date.now(),
-    });
-    setSessionCookie(res, sid);
+    setSessionCookie(req, res, credential);
 
     res.json({
       loggedIn: true,
@@ -147,17 +164,15 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 app.post("/api/auth/logout", (req, res) => {
-  const sid = parseCookies(req).dfm_sid;
-  if (sid) sessions.delete(sid);
-  clearSessionCookie(res);
+  clearSessionCookie(req, res);
   res.json({ ok: true });
 });
 
 /**
  * Save approved candidate domains only (never full sender addresses / Gmail tokens).
  */
-app.post("/api/candidates", (req, res) => {
-  const session = requireSession(req, res);
+app.post("/api/candidates", async (req, res) => {
+  const session = await requireSession(req, res);
   if (!session) return;
 
   const domains = Array.isArray(req.body?.domains) ? req.body.domains : [];
@@ -196,8 +211,8 @@ app.post("/api/candidates", (req, res) => {
   });
 });
 
-app.get("/api/candidates", (req, res) => {
-  const session = requireSession(req, res);
+app.get("/api/candidates", async (req, res) => {
+  const session = await requireSession(req, res);
   if (!session) return;
   const record = savedCandidates.get(session.sub) || {
     domains: [],
@@ -208,7 +223,12 @@ app.get("/api/candidates", (req, res) => {
 
 app.use(express.static(publicDir));
 
-app.listen(port, () => {
-  console.log(`DFM prototype: http://localhost:${port}`);
-  console.log("Product login on server; Gmail scan stays in the browser.");
-});
+// On Vercel the platform invokes the exported app; binding a port there would hang the build.
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`DFM prototype: http://localhost:${port}`);
+    console.log("Product login on server; Gmail scan stays in the browser.");
+  });
+}
+
+export default app;
