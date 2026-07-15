@@ -1,12 +1,14 @@
 {
   "version": "2026-07-15",
-  "attribution": "Partly seeded from JustDeleteMe (https://github.com/jdm-contrib/jdm), MIT. Every entry below was opened and read against its official_source_url on 2026-07-15; unverified candidates were excluded.",
+  "attribution": "Seeded from JustDeleteMe (https://github.com/jdm-contrib/jdm), MIT. Every entry below was opened and read against its official_source_url on 2026-07-15; unverified candidates were excluded. The Korean expansion of 2026-07-15 takes no data from JustDeleteMe and was verified independently against each service documentation: of the nine services that overlap, JustDeleteMe URL differed from ours on eight, and every difference we could check was JustDeleteMe being stale (its Kakao link points at 계정 비활성화, which is not 탈퇴). JustDeleteMe carries 2,562 services and exactly one genuinely Korean one.",
   "services": [
     {
       "service_id": "kakao",
       "display_name": "카카오계정",
       "canonical_domain": "kakao.com",
-      "sender_domain_aliases": ["kakao.com"],
+      "sender_domain_aliases": [
+        "kakao.com"
+      ],
       "category": "social",
       "deletion_route": "self_service",
       "url": "https://accounts.kakao.com/",
@@ -29,14 +31,16 @@
       "service_id": "spotify",
       "display_name": "Spotify",
       "canonical_domain": "spotify.com",
-      "sender_domain_aliases": ["spotify.com"],
+      "sender_domain_aliases": [
+        "spotify.com"
+      ],
       "category": "other",
       "deletion_route": "self_service",
       "url": "https://www.spotify.com/kr-ko/account/close/",
       "steps": [
         "공식 '계정 해지 및 데이터 삭제' 페이지로 이동해 로그인",
         "계정 해지 및 데이터 삭제 절차 완료",
-        "해지 후 7일 이내 재활성화 메일을 받을 수 있음 — 7일 지나면 삭제 프로세스 시작"
+        "해지 후 7일 이내 재활성화 메일을 받을 수 있음. 7일 지나면 삭제 프로세스 시작"
       ],
       "prerequisites": [
         "Premium만 끊으려면 탈퇴가 아니라 무료 요금제 전환",
@@ -52,7 +56,9 @@
       "service_id": "google",
       "display_name": "Google",
       "canonical_domain": "google.com",
-      "sender_domain_aliases": ["google.com"],
+      "sender_domain_aliases": [
+        "google.com"
+      ],
       "category": "cloud",
       "deletion_route": "self_service",
       "url": "https://myaccount.google.com/data-and-privacy",
@@ -75,7 +81,9 @@
       "service_id": "github",
       "display_name": "GitHub",
       "canonical_domain": "github.com",
-      "sender_domain_aliases": ["github.com"],
+      "sender_domain_aliases": [
+        "github.com"
+      ],
       "category": "productivity",
       "deletion_route": "self_service",
       "url": "https://github.com/settings/admin",
@@ -98,7 +106,9 @@
       "service_id": "linkedin",
       "display_name": "LinkedIn",
       "canonical_domain": "linkedin.com",
-      "sender_domain_aliases": ["linkedin.com"],
+      "sender_domain_aliases": [
+        "linkedin.com"
+      ],
       "category": "social",
       "deletion_route": "self_service",
       "url": "https://www.linkedin.com/mypreferences/d/close-account",
@@ -121,7 +131,9 @@
       "service_id": "discord",
       "display_name": "Discord",
       "canonical_domain": "discord.com",
-      "sender_domain_aliases": ["discord.com"],
+      "sender_domain_aliases": [
+        "discord.com"
+      ],
       "category": "community",
       "deletion_route": "self_service",
       "url": "https://discord.com/channels/@me",
@@ -132,7 +144,7 @@
       ],
       "prerequisites": [
         "소유 중인 서버 소유권 이전/삭제 필수",
-        "확정 후 15일 pending deletion — 그 안에 로그인하면 복구 가능"
+        "확정 후 15일 pending deletion. 그 안에 로그인하면 복구 가능"
       ],
       "identity_verification": "비밀번호 및(해당 시) 2FA",
       "grace_period": "15일 pending deletion",
@@ -144,17 +156,19 @@
       "service_id": "apple",
       "display_name": "Apple",
       "canonical_domain": "apple.com",
-      "sender_domain_aliases": ["apple.com"],
+      "sender_domain_aliases": [
+        "apple.com"
+      ],
       "category": "cloud",
       "deletion_route": "self_service",
       "url": "https://privacy.apple.com/",
       "steps": [
         "Apple 데이터 및 개인정보 보호 페이지(privacy.apple.com)에 Apple 계정으로 로그인",
         "Apple 계정 및 연결 데이터 영구 삭제 요청 선택",
-        "안내에 따라 요청 완료 — 처리 중 제공되는 접근 코드를 보관"
+        "안내에 따라 요청 완료. 처리 중 제공되는 접근 코드를 보관"
       ],
       "prerequisites": [
-        "일시 비활성화와 영구 삭제는 다름 — 영구 삭제를 선택",
+        "일시 비활성화와 영구 삭제는 다름. 영구 삭제를 선택",
         "구독·가족 공유·기기 종속성을 먼저 정리"
       ],
       "identity_verification": "Apple 계정 로그인",
@@ -167,7 +181,9 @@
       "service_id": "microsoft",
       "display_name": "Microsoft",
       "canonical_domain": "microsoft.com",
-      "sender_domain_aliases": ["microsoft.com"],
+      "sender_domain_aliases": [
+        "microsoft.com"
+      ],
       "category": "cloud",
       "deletion_route": "self_service",
       "url": "https://account.live.com/closeaccount.aspx",
@@ -190,7 +206,9 @@
       "service_id": "naver",
       "display_name": "네이버",
       "canonical_domain": "naver.com",
-      "sender_domain_aliases": ["naver.com"],
+      "sender_domain_aliases": [
+        "naver.com"
+      ],
       "category": "email",
       "deletion_route": "self_service",
       "url": "https://nid.naver.com/user2/help/leaveId?lang=ko_KR",
@@ -213,7 +231,9 @@
       "service_id": "privacy_go_kr",
       "display_name": "개인정보 포털 정보주체 권리행사",
       "canonical_domain": "privacy.go.kr",
-      "sender_domain_aliases": ["privacy.go.kr"],
+      "sender_domain_aliases": [
+        "privacy.go.kr"
+      ],
       "category": "identity",
       "deletion_route": "public_service",
       "url": "https://www.privacy.go.kr/front/wcp/dcl/per/memberSecStep1.do",
@@ -230,6 +250,952 @@
       "identity_verification": "공동인증서·아이핀·휴대폰·신용카드·SNS 등 본인확인",
       "grace_period": "신청 후 처리 결과 회신(대행 릴레이)",
       "official_source_url": "https://www.privacy.go.kr/front/contents/cntntsView.do?contsNo=192",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "coupang",
+      "display_name": "쿠팡",
+      "canonical_domain": "coupang.com",
+      "sender_domain_aliases": [
+        "coupang.com"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://www.coupang.com/",
+      "steps": [
+        "쿠팡에 로그인한 뒤 웹에서는 '마이쿠팡 > My 정보 > 개인정보 확인 수정'으로 이동합니다.",
+        "앱에서는 '마이쿠팡 > 내정보 관리 > 회원정보 수정'으로 이동합니다.",
+        "개인정보 확인/수정 화면에서 '회원탈퇴'를 선택해 직접 탈퇴를 진행합니다.",
+        "직접 탈퇴가 어려운 경우 1:1 상담(1:1 채팅문의), 고객센터(1577-7011), help@coupang.com으로 탈퇴 및 개인정보 삭제를 요청할 수 있습니다."
+      ],
+      "prerequisites": [],
+      "grace_period": "공식 개인정보처리방침 기준, 회원탈퇴 시 개인정보를 90일간 보관한 후 파기합니다. 세법 등 관계 법령에 따라 보존 의무가 있는 정보(거래기록 등)는 3년에서 5년간 별도로 보관됩니다. 문서에 탈퇴 후 계정 복구에 관한 안내는 없습니다.",
+      "official_source_url": "https://privacy.coupang.com/ko/center/coupang/",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "11st",
+      "display_name": "11번가",
+      "canonical_domain": "11st.co.kr",
+      "sender_domain_aliases": [
+        "11st.co.kr"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://www.11st.co.kr/",
+      "steps": [
+        "11번가에 로그인한 뒤 '나의 11번가 > 회원정보 > 회원탈퇴 > 탈퇴하기'로 이동해 탈퇴를 진행합니다.",
+        "홈페이지 첫 화면의 '회원정보'에서 '회원탈퇴'를 클릭해도 개인정보 수집/이용/제공 동의를 즉시 철회할 수 있습니다.",
+        "직접 진행이 어려운 경우 개인정보보호책임자에게 서면, 전화, 이메일로 연락하거나 고객센터(1599-0110)로 요청할 수 있습니다."
+      ],
+      "prerequisites": [],
+      "grace_period": "공식 개인정보처리방침 기준, 탈퇴 후 1개월(판매회원은 2개월)이 지난 뒤 개인정보를 파기합니다. 부정 이용 및 거래 관련 재가입 방지와 분쟁 대응을 위해 관련 정보는 탈퇴일로부터 1년(12개월)간 보관됩니다.",
+      "official_source_url": "https://privacy.11st.co.kr/",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "gmarket",
+      "display_name": "G마켓",
+      "canonical_domain": "gmarket.co.kr",
+      "sender_domain_aliases": [
+        "gmarket.co.kr"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://www.gmarket.co.kr/",
+      "steps": [
+        "PC 웹에서는 로그인 후 '나의 G마켓 > 개인정보설정 > 회원정보 설정 > 기본 정보 관리 > 회원 탈퇴'로 이동해 탈퇴를 진행합니다.",
+        "앱에서는 '내이름 우측 설정 > 회원정보 설정 > 기본 정보 관리 > 회원 탈퇴'로 이동합니다.",
+        "직접 진행이 어려운 경우 개인정보보호 전담 고객센터(02-589-8986)로 탈퇴를 요청할 수 있습니다."
+      ],
+      "prerequisites": [],
+      "identity_verification": "공식 개인정보처리방침은 권리 행사 시 회원ID와 본인확인 식별정보를 밝혀야 한다고 안내합니다.",
+      "grace_period": "공식 개인정보처리방침 기준, 회원탈퇴 후 5일 이내에 개인정보를 파기합니다. 다만 부정거래가 확인된 경우에는 회원탈퇴 후 1년간 보관하며, 법령상 보존 의무가 있는 정보는 해당 기간 동안 보관됩니다.",
+      "official_source_url": "https://policy.gmarket.co.kr/terms-policy/privacy",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "auction",
+      "display_name": "옥션",
+      "canonical_domain": "auction.co.kr",
+      "sender_domain_aliases": [
+        "auction.co.kr"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://member-web.auction.co.kr/delete1",
+      "steps": [
+        "옥션에 로그인한 뒤 '마이옥션 > 회원정보 > 회원정보수정 > 회원 탈퇴'로 이동합니다.",
+        "탈퇴 화면('탈퇴하신다니 아쉬워요')에서 스마일머니, 환불예정금, 스마일캐시, 쿠폰 잔액 안내와 유의사항을 확인합니다.",
+        "'모든 쇼핑 정보와 혜택이 사라져요. 정말 탈퇴하시겠어요?' 확인 단계를 거쳐 탈퇴를 완료합니다.",
+        "직접 진행이 어려운 경우 고객센터(02-589-8990)로 탈퇴를 요청할 수 있습니다."
+      ],
+      "prerequisites": [
+        "스마일머니와 환불예정금 잔액은 모두 사용하거나 출금한 후에야 탈퇴가 가능합니다. 잔액이 남아 있으면 '출금 신청 후 다시 진행해 주세요' 안내와 함께 탈퇴가 막힙니다.",
+        "마이너스 스마일캐시 또는 마이너스 스마일머니가 남아 있으면 탈퇴할 수 없습니다.",
+        "유니버스 클럽 이용 중이면 해지 후에 탈퇴할 수 있습니다.",
+        "판매예치금 잔고가 남아 있으면 탈퇴할 수 없습니다.",
+        "보유한 스마일캐시와 쿠폰은 탈퇴 시 모두 사라지므로 미리 사용하는 것이 좋습니다.",
+        "문의게시판, 상품평 등 게시판형 서비스에 등록한 게시물은 탈퇴 후에도 삭제되지 않으므로, 삭제를 원하면 반드시 직접 삭제한 후 탈퇴를 신청해야 합니다.",
+        "판매회원의 경우 마스터ID와 연동된 모든 판매자 ID가 함께 탈퇴되며 마스터 ID도 탈퇴 처리됩니다."
+      ],
+      "identity_verification": "공식 개인정보처리방침은 권리 행사 시 회원ID와 본인확인 식별정보를 밝혀야 한다고 안내합니다.",
+      "grace_period": "공식 개인정보처리방침 기준, 회원탈퇴 후 5일 이내에 개인정보를 파기하며 부정거래가 확인된 경우 1년간 보관합니다. 탈퇴 화면 안내에 따르면 본인인증이 완료된 회원은 탈퇴 후 7일간 재가입이 불가능합니다.",
+      "official_source_url": "https://policy.auction.co.kr/terms-policy/privacy",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "interpark",
+      "display_name": "인터파크",
+      "canonical_domain": "interpark.com",
+      "sender_domain_aliases": [
+        "interpark.com"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://nol.interpark.com/",
+      "steps": [
+        "인터파크(놀유니버스) 사이트에 로그인합니다.",
+        "'회원정보 > 회원탈퇴하기'로 이동해 언제든지 동의 철회 및 탈퇴를 진행할 수 있습니다.",
+        "직접 진행이 어려운 경우 개인정보 민원담당자에게 서면, 전화, 이메일로 연락하면 개인정보 삭제 등 필요한 조치를 받을 수 있습니다."
+      ],
+      "prerequisites": [
+        "인터파크는 놀유니버스가 운영하는 NOL 계정에 속합니다(interpark.com은 nol.interpark.com으로 이동). 야놀자 공식 안내는 NOL 회원 탈퇴 시 NOL, NOL 인터파크투어, NOL 티켓, 트리플을 모두 이용할 수 없다고 명시합니다. 탈퇴 화면에서 인터파크만 탈퇴하는 것인지 NOL 계정 전체가 탈퇴되는 것인지 반드시 확인한 뒤 진행하세요."
+      ],
+      "grace_period": "공식 개인정보처리방침 기준, 일부 개인정보는 탈퇴 후 7일이 지난 뒤 파기합니다(반복 재가입을 통한 쿠폰, 이벤트 혜택 악용 차단 목적). 회원ID는 법령상 보존 의무 이행 등을 위해 보관되며, 탈퇴 후 동일 ID로의 재가입은 허용되지 않습니다.",
+      "official_source_url": "https://nol.interpark.com/_partials/protect_privacy/protect_privacy.html",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "ssg",
+      "display_name": "SSG닷컴",
+      "canonical_domain": "ssg.com",
+      "sender_domain_aliases": [
+        "ssg.com"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://www.ssg.com/",
+      "steps": [
+        "SSG.COM에 로그인한 뒤 'MY SSG > 나의 정보관리 > 회원탈퇴'로 이동합니다.",
+        "탈퇴 유의사항에 동의한 뒤 탈퇴를 완료합니다.",
+        "탈퇴 시 신세계포인트 통합회원 전체 탈퇴와 SSG.COM 사이트만 탈퇴하는 방식 중에서 선택할 수 있습니다."
+      ],
+      "prerequisites": [
+        "보유한 SSG MONEY, 할인 쿠폰, 알비백 보증금 등은 탈퇴 시 모두 자동 소멸되며 재가입해도 복구되지 않으므로 탈퇴 전에 사용하거나 정리해야 합니다.",
+        "통합회원 탈퇴는 하나의 아이디로 연결된 신세계 계열 서비스에서 함께 탈퇴되므로, SSG.COM만 정리하려면 사이트 탈퇴를 선택해야 합니다."
+      ],
+      "grace_period": "공식 FAQ 기준, 회원 탈퇴 신청 후에는 취소할 수 없습니다. 탈퇴 후 최대 30일간 재가입이 제한되며, 개인정보는 탈퇴 후 30일이 지난 뒤 파기됩니다(거래기록 5년, 분쟁처리 기록 3년 등 법령상 보존 정보는 제외). 미완료 주문이나 교환, 반품이 진행 중인 경우 처리 완료 시까지 관련 정보가 보관됩니다.",
+      "official_source_url": "https://m.ssg.com/customer/faqSearchList.ssg?keyword=%ED%9A%8C%EC%9B%90%ED%83%88%ED%87%B4&src_area=ssgfaq",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "lotteon",
+      "display_name": "롯데ON",
+      "canonical_domain": "lotteon.com",
+      "sender_domain_aliases": [
+        "lotteon.com"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://www.lotteon.com/",
+      "steps": [
+        "롯데ON에 로그인한 뒤 홈페이지에서 '마이롯데 > 회원정보관리'로 이동합니다.",
+        "회원탈퇴 절차를 통해 개인정보 삭제 및 처리 정지를 요청합니다.",
+        "직접 진행이 어려운 경우 롯데ON 고객센터(02-6744-5825), 판매자고객센터(1599-8436), 또는 개인정보보안팀 이메일(LD_CPO@lotte.net)로 요청할 수 있습니다."
+      ],
+      "prerequisites": [],
+      "grace_period": "공식 개인정보처리방침 기준, 동의받은 개인정보는 회원 탈퇴 후 즉시 파기합니다. 다만 관계 법령에 따라 보관해야 하는 경우에는 법령에서 정한 기간 동안 보관 장소를 달리하여 보관합니다.",
+      "official_source_url": "https://www.lotteon.com/common/footerPinfop",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "baemin",
+      "display_name": "배달의민족",
+      "canonical_domain": "baemin.com",
+      "sender_domain_aliases": [
+        "baemin.com"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://www.baemin.com/",
+      "steps": [
+        "배달의민족 앱 또는 웹에 로그인합니다.",
+        "회원은 언제든지 회사에 해지 의사를 통지해 이용계약을 해지할 수 있습니다(서비스 이용약관 제8조 제1항 제1호). 앱이나 웹에서 직접 회원탈퇴를 진행하거나, 고객센터를 통해 회원탈퇴를 요청할 수 있습니다(개인정보처리방침).",
+        "해지 요청은 특별한 사정이 없는 한 즉시 처리됩니다(이용약관 제8조 제1항 제2호).",
+        "직접 탈퇴가 어려우면 고객센터(1600-0987)로 회원탈퇴를 요청합니다."
+      ],
+      "prerequisites": [
+        "미사용 무료포인트는 탈퇴 시 소멸되며 별도 보상이 없습니다(이용약관 제18조 제6항). 남은 무료포인트는 탈퇴 전에 사용하세요.",
+        "유료포인트가 있다면 탈퇴 전에 환급을 신청하세요. 회사는 환급수수료를 공제하고 환급할 수 있습니다(이용약관 제18조 제5항).",
+        "할인쿠폰은 이용계약이 종료되면 소멸합니다(이용약관 제19조 제2항).",
+        "탈퇴해도 회원이 작성한 게시물(리뷰 등)은 삭제되지 않습니다(이용약관 제8조 제1항 제3호). 지우고 싶은 게시물은 탈퇴 전에 직접 삭제하세요."
+      ],
+      "grace_period": "탈퇴해도 개인정보가 즉시 전부 삭제되지는 않습니다. 개인정보처리방침에 따라 부정사용 탐지 및 차단 목적 정보는 회원 탈퇴일로부터 1년, 회원가입 남용 방지 및 법정대리인 본인인증 확인 목적 정보는 회원 탈퇴일로부터 3년간 보관 후 파기됩니다(관련 법령에 따라 보관되는 정보는 예외).",
+      "official_source_url": "https://terms.baemin.com/content/BAEMIN_3?shotList=true",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "yogiyo",
+      "display_name": "요기요",
+      "canonical_domain": "yogiyo.co.kr",
+      "sender_domain_aliases": [
+        "yogiyo.co.kr"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://www.yogiyo.co.kr/",
+      "steps": [
+        "요기요 앱을 실행해 로그인합니다.",
+        "『마이요기요』 > 『내정보』 > 『회원탈퇴』 순서로 이동해 회원탈퇴를 진행합니다(개인정보 처리방침에 명시된 경로).",
+        "회원은 언제든지 회사에 탈퇴를 요청할 수 있으며, 회사는 특별한 사정이 없는 한 탈퇴 요청을 받는 즉시 처리합니다(이용약관 제9조 제1항, 제2항)."
+      ],
+      "prerequisites": [
+        "요기패스를 이용 중이라면 요기요 서비스 탈퇴 시 요기패스 이용계약도 자동으로 해지되며, 이미 결제된 이용료는 요기패스 약관 제14조 기준에 따라 환불됩니다(요기패스 서비스 이용약관 제15조 제3항)."
+      ],
+      "grace_period": "탈퇴일 기준 90일 이내에 계정을 복구하면 유효기간이 남아있는 포인트가 함께 복구됩니다. 탈퇴일 기준 90일이 지나면 적립된 포인트는 모두 소멸됩니다(포인트 정책 제4조 제5항). 회원 정보는 회원탈퇴일로부터 90일간 보관됩니다(단, DI(중복가입확인정보)는 5년). 이 90일 보관은 재가입과 임의탈퇴를 반복해 할인쿠폰이나 이벤트 혜택을 편법 수취하는 것을 방지하기 위한 것입니다(이용약관 제9조 제2항). 이와 별도로 전자상거래법 등 관련 법령에 따라 계약 또는 청약철회 기록과 대금결제 및 재화 공급 기록은 5년, 소비자 불만 또는 분쟁 처리 기록은 3년간 보관됩니다.",
+      "official_source_url": "https://policy.yogiyo.co.kr/#tab-2",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "kakao_t",
+      "display_name": "카카오 T",
+      "canonical_domain": "kakaomobility.com",
+      "sender_domain_aliases": [
+        "kakaomobility.com"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://service.kakaomobility.com/cs/faqs/search/?keyword=%ED%83%88%ED%87%B4",
+      "steps": [
+        "카카오 T 앱을 실행해 로그인합니다.",
+        "오른쪽 아래 [내 정보]를 누릅니다.",
+        "가장 위에 있는 [닉네임과 휴대폰 번호 옆 >]를 누릅니다.",
+        "가장 아래 [카카오 T 탈퇴하기]를 눌러 탈퇴를 진행합니다."
+      ],
+      "prerequisites": [
+        "탈퇴 의사를 통지하기 전에 진행 중인 모든 유료서비스의 거래를 완료하거나 철회 또는 취소해야 합니다(이용약관 제12조 제1항).",
+        "유상으로 구매한 카카오 T 포인트 잔액은 탈퇴 전에 환급받아야 합니다(이용약관 제12조 제1항). 회사가 무상으로 지급한 카카오 T 포인트 및 혜택은 이용계약 해지와 함께 소멸됩니다(이용약관 제12조 제2항).",
+        "참여 중인 가족계정이 있다면 삭제하거나 연결을 해제해야 합니다(이용약관 제12조 제1항, 제15조 제3항).",
+        "결제실패에 따른 미수가 있으면 해당 결제를 완료한 후에 탈퇴 의사를 통지해야 합니다(이용약관 제12조 제1항).",
+        "카카오 T 탈퇴 시 카카오 T, 카카오 T 픽커, 카카오 T 대리, 카카오 내비 등이 모두 함께 탈퇴됩니다.",
+        "이용제한 등 제재를 받은 회원이 제재기간 중에 이용계약 해지를 요청하면 회사가 해지를 거부할 수 있습니다(이용약관 제12조 제6항).",
+        "카카오 T 탈퇴는 카카오계정 탈퇴와 별개입니다. 카카오 T 탈퇴만으로 카카오계정이 사라지지는 않습니다."
+      ],
+      "grace_period": "쿠폰, 이용내역 등 계정 정보가 삭제되며 복구가 불가합니다. 카카오 T 픽커 탈퇴 후 일부 서비스는 재가입에 30일 제한이 있을 수 있습니다.",
+      "official_source_url": "https://service.kakaomobility.com/cs/faqs/search/?keyword=%ED%83%88%ED%87%B4",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "toss",
+      "display_name": "토스 (비바리퍼블리카 토스 앱)",
+      "canonical_domain": "toss.im",
+      "sender_domain_aliases": [
+        "toss.im"
+      ],
+      "category": "finance",
+      "deletion_route": "self_service",
+      "url": "https://support.toss.im/faq/218",
+      "steps": [
+        "토스 앱에서 '전체'로 이동합니다.",
+        "오른쪽 상단 '설정(톱니바퀴모양)'을 누릅니다.",
+        "하단의 '탈퇴하기'를 누릅니다.",
+        "비밀번호를 입력해 탈퇴를 완료합니다."
+      ],
+      "prerequisites": [
+        "토스머니와 토스포인트 잔액이 0원이어야 합니다.",
+        "토스유스카드가 있다면 해지해야 합니다.",
+        "토스프라임에 가입했다면 해지해야 합니다.",
+        "등록된 자동이체를 모두 삭제해야 합니다.",
+        "진행중이거나 예약중인 송금은 모두 취소됩니다.",
+        "토스를 통한 결제 이력이 있다면 취소 시 환불 계좌 설정이 필요합니다.",
+        "토스증권, 토스뱅크 계좌는 별도로 해지해야 합니다. 토스 앱 탈퇴만으로는 토스증권과 토스뱅크가 함께 해지되지 않습니다.",
+        "토스에서 개설한 KEB하나은행, 수협은행, 신한금융투자 계좌를 해지하려면 각 은행 앱, 고객센터 또는 영업점으로 별도 문의해야 합니다.",
+        "이 항목은 비바리퍼블리카가 운영하는 토스 앱 계정 탈퇴를 설명합니다. 토스뱅크, 토스증권, 토스페이먼츠는 별개 주체의 서비스로 탈퇴 경로가 다릅니다."
+      ],
+      "identity_verification": "탈퇴 마지막 단계에서 토스 비밀번호를 입력합니다.",
+      "grace_period": "회원 탈퇴 시 개인정보처리방침에 따라 기존 거래기록은 삭제되며 재가입 시 확인할 수 없습니다. 단, 토스를 통한 거래내역 등 금융거래정보는 관련 법에 따라 5년간 보관됩니다.",
+      "official_source_url": "https://support.toss.im/faq/218",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "payco",
+      "display_name": "페이코 PAYCO",
+      "canonical_domain": "payco.com",
+      "sender_domain_aliases": [
+        "payco.com"
+      ],
+      "category": "finance",
+      "deletion_route": "self_service",
+      "url": "https://www.payco.com/",
+      "steps": [
+        "웹에서 탈퇴하려면 PAYCO 홈페이지에 로그인한 뒤 우측 상단 [MY PAYCO > 회원정보 > 회원탈퇴]로 이동합니다.",
+        "앱에서 탈퇴하려면 PAYCO 앱 실행 후 로그인하고 상단 [MY] > MY 화면 맨 하단 [계정] > 계정 정보 > 가입 정보로 이동합니다.",
+        "회원 탈퇴 시 안내되는 주의사항을 확인한 후 탈퇴를 신청합니다.",
+        "탈퇴 신청 후 7일의 유예 기간이 지나면 탈퇴가 완료됩니다."
+      ],
+      "prerequisites": [
+        "PAYCO 충전 포인트가 있다면 전액 사용하거나 환급신청 후에 탈퇴할 수 있습니다.",
+        "PAYCO 서비스를 탈퇴하면 PAYCO 아이디를 더 이상 사용할 수 없고, 해당 아이디로 로그인해 이용 중인 개별 서비스들도 이용할 수 없게 됩니다.",
+        "개별 서비스 해지를 원하는 경우에는 각 서비스 홈페이지에서 별도로 진행해야 합니다."
+      ],
+      "grace_period": "회원 탈퇴 신청 시 7일의 유예 기간이 지난 후 탈퇴가 완료됩니다. 유예 기간 중에는 로그인해도 로그인 성공 및 PAYCO 서비스 이용이 불가능합니다. 탈퇴 신청을 철회하려면 탈퇴가 완료되기 전에 해당 아이디로 로그인한 뒤 [탈퇴 신청 취소]를 선택하면 됩니다.",
+      "official_source_url": "https://oc.payco.com/payco/hc/mobile/article/7/",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "netflix",
+      "display_name": "넷플릭스",
+      "canonical_domain": "netflix.com",
+      "sender_domain_aliases": [
+        "netflix.com"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://www.netflix.com/account/security",
+      "steps": [
+        "넷플릭스에 로그인한 뒤 계정 페이지의 [보안] 섹션으로 이동합니다.",
+        "[계정 삭제]를 선택합니다.",
+        "보안 확인을 완료합니다.",
+        "확인란을 선택한 다음 [영구 삭제]를 눌러 계정 삭제를 확정합니다.",
+        "삭제 확인 이메일이 발송됩니다."
+      ],
+      "prerequisites": [
+        "멤버십이 활성화 상태인 경우, 현재 결제 주기 종료 시 해지되며 계정은 그 후 영구적으로 삭제됩니다. 멤버십 해지(구독 해지)만으로는 계정이 삭제되지 않습니다.",
+        "계정을 삭제하면 계정 활동, 환경 설정 등에 대한 접근을 영구적으로 상실합니다."
+      ],
+      "identity_verification": "넷플릭스 보안 확인 절차를 완료해야 합니다.",
+      "grace_period": "현재 결제 주기가 종료되기 전에는 언제든지 계정 페이지에서 삭제 요청을 취소할 수 있습니다. 별도로 삭제를 요청하지 않으면 멤버십이 해지된 후 10개월이 경과한 계정을 자동으로 삭제하는 것이 넷플릭스의 표준 관행입니다.",
+      "official_source_url": "https://help.netflix.com/ko/node/126558",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "wavve",
+      "display_name": "웨이브",
+      "canonical_domain": "wavve.com",
+      "sender_domain_aliases": [
+        "wavve.com"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://www.wavve.com/",
+      "steps": [
+        "웨이브에 로그인합니다.",
+        "[MY] > [정보수정] > [회원탈퇴]로 이동합니다.",
+        "안내를 확인한 뒤 탈퇴를 요청하면 회사가 즉시 회원탈퇴를 처리합니다."
+      ],
+      "prerequisites": [
+        "회원탈퇴 시 보유 이용권과 개별구매 콘텐츠(영구 소장 포함), 쿠폰 및 무상으로 지급된 코인이 모두 소멸되며 해당 서비스를 이용할 수 없습니다."
+      ],
+      "official_source_url": "https://member.wavve.com/signup/terms?category=service",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "tving",
+      "display_name": "티빙",
+      "canonical_domain": "tving.com",
+      "sender_domain_aliases": [
+        "tving.com"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://www.tving.com/",
+      "steps": [
+        "티빙 웹(PC)에 로그인합니다.",
+        "우측 상단 [프로필 아이콘]을 클릭합니다.",
+        "[MY] 메뉴를 클릭합니다.",
+        "[회원 정보 관리] 메뉴를 클릭합니다.",
+        "[회원탈퇴 및 계정삭제] 메뉴를 클릭해 탈퇴를 진행합니다.",
+        "모바일 앱은 로그인 후 우측 하단 [마이] > [회원 정보 관리] > [회원탈퇴 및 계정삭제]로 진행합니다."
+      ],
+      "prerequisites": [
+        "유료 서비스를 이용 중인 경우 회원탈퇴 시 정기결제 해지와 상품 포기 동의가 함께 진행됩니다.",
+        "정기결제 해지 및 상품 포기 동의 시 보유한 이용권 및 쿠폰의 이용이 즉시 중단됩니다.",
+        "회원탈퇴 및 계정삭제는 본인이 직접 진행해야 하며, 1:1 게시판 문의나 tving@cj.net으로 요청할 경우 지원되지 않습니다.",
+        "서비스 내에 게시한 게시물은 회원탈퇴 후에도 삭제되지 않을 수 있으므로, 필요한 경우 탈퇴 전에 직접 삭제하거나 비공개로 변경해야 합니다."
+      ],
+      "grace_period": "환불 등 고객 대응을 위해 회원탈퇴 후 5일이 경과하면 사용자 계정 및 데이터가 삭제 처리됩니다.",
+      "official_source_url": "https://www.tving.com/help/faq?page=1&categoryCode=&searchWord=%ED%83%88%ED%87%B4",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "watcha",
+      "display_name": "왓챠",
+      "canonical_domain": "watcha.com",
+      "sender_domain_aliases": [
+        "watcha.com"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://watcha.com/",
+      "steps": [
+        "왓챠에 로그인합니다. 탈퇴는 가장 왼쪽의 기본 프로필에서만 가능합니다.",
+        "PC 웹은 우측 상단 프로필을 클릭한 뒤 [나의 왓챠]로 이동해 회원 탈퇴의 [탈퇴하기]를 클릭합니다.",
+        "모바일 앱은 우측 상단 프로필을 클릭한 뒤 [계정] > [탈퇴하기]를 클릭합니다.",
+        "왓챠에 등록한 이메일로 발송된 탈퇴 메일을 확인하고 탈퇴를 완료합니다."
+      ],
+      "prerequisites": [
+        "탈퇴 시 유료/무료 왓챠 캐시, 소장한 콘텐츠, 구독권 및 계정이 소멸되며 복구되지 않습니다.",
+        "탈퇴는 가장 왼쪽의 기본 프로필에서만 가능합니다.",
+        "가입한 이메일이 유효하지 않거나 왓챠 발신 이메일이 스팸으로 처리된 경우 탈퇴 승인 메일을 받지 못할 수 있습니다."
+      ],
+      "identity_verification": "왓챠에 등록한 이메일로 발송되는 탈퇴 메일을 확인해야 탈퇴가 완료됩니다.",
+      "official_source_url": "https://help.watcha.com/hc/ko/articles/900002408246",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "melon",
+      "display_name": "멜론",
+      "canonical_domain": "melon.com",
+      "sender_domain_aliases": [
+        "melon.com"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://www.melon.com/",
+      "steps": [
+        "멜론 웹사이트 또는 멜론 앱에 로그인합니다.",
+        "[내 정보] > [개인정보 관리] > [멜론 탈퇴]로 이동합니다.",
+        "탈퇴 전 안내사항을 반드시 확인한 뒤 탈퇴를 진행합니다."
+      ],
+      "prerequisites": [
+        "일부 서비스 이용 상태에서는 멜론 탈퇴가 제한될 수 있습니다. 탈퇴할 수 없는 사유를 확인한 뒤 해당 서비스를 해지하거나 해결한 후 탈퇴를 진행해야 합니다.",
+        "탈퇴 시 회원정보는 모두 삭제되며, 재가입하더라도 삭제된 데이터는 복구되지 않습니다.",
+        "게시판형 서비스에 등록한 게시글은 탈퇴 후에도 삭제되지 않고 서비스에 남습니다. 탈퇴 이후에는 본인 확인이 불가능해 별도로 삭제할 수 없으므로, 삭제를 원하는 게시물은 탈퇴 전에 직접 비공개로 변경하거나 삭제해야 합니다.",
+        "부정 이용 방지 목적으로 내부 식별 정보는 탈퇴 후 6개월간 보관된 뒤 삭제됩니다."
+      ],
+      "official_source_url": "https://faqs2.melon.com/customer/faq/informFaq.htm?faqId=QUES20160831000022",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "genie",
+      "display_name": "지니뮤직",
+      "canonical_domain": "genie.co.kr",
+      "sender_domain_aliases": [
+        "genie.co.kr"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://www.genie.co.kr/",
+      "steps": [
+        "지니 웹사이트(PC)에 로그인합니다. 회원 탈퇴는 지니 웹사이트(PC)를 통해서만 가능합니다.",
+        "[내정보] > [회원탈퇴]로 이동합니다.",
+        "안내를 확인한 뒤 탈퇴를 진행합니다."
+      ],
+      "prerequisites": [
+        "별도 통신사 부가서비스 또는 정기결제 상품을 이용 중인 경우, 해지 후에만 탈퇴가 가능합니다.",
+        "탈퇴 후에는 보유 중인 지니캐시와 이용권을 포함한 모든 이용 정보가 삭제되므로 환불이 불가합니다.",
+        "탈퇴 시 회원 정보 및 개인 이용기록은 삭제되며 삭제된 데이터는 복구할 수 없고, 동일 ID로 재가입할 수 없습니다."
+      ],
+      "official_source_url": "https://www.genie.co.kr/support/service/helpView?ct=9&fi=1&pg=1",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "bugs",
+      "display_name": "벅스",
+      "canonical_domain": "bugs.co.kr",
+      "sender_domain_aliases": [
+        "bugs.co.kr"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://music.bugs.co.kr/",
+      "steps": [
+        "PC에서 벅스 서비스에 로그인합니다. 회원 탈퇴는 PC에서 가능합니다.",
+        "홈페이지 상단의 아이디를 클릭합니다.",
+        "[정보관리] > [개인정보관리] > [회원탈퇴]에서 탈퇴를 진행합니다."
+      ],
+      "prerequisites": [
+        "탈퇴 후에는 결제취소 및 환불이 불가하며 모든 정보가 삭제되어 복구할 수 없습니다.",
+        "벅스 서비스 이용 정보, 보유 이용권, 벅스캐시, 구매한 음악이 삭제되며, 제휴사 결합 이용권을 사용 중인 경우 벅스와 제휴사 서비스를 모두 이용할 수 없습니다.",
+        "피망, 샷온라인 등 채널링 제휴 서비스도 이용할 수 없게 됩니다."
+      ],
+      "official_source_url": "https://music.bugs.co.kr/m/help/nextbugs?category=12",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "flo",
+      "display_name": "FLO",
+      "canonical_domain": "music-flo.com",
+      "sender_domain_aliases": [
+        "music-flo.com"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://www.music-flo.com/",
+      "steps": [
+        "FLO에 로그인합니다. 소셜 계정으로 가입한 경우 탈퇴하려는 소셜 계정으로 로그인합니다.",
+        "홈 화면 오른쪽 상단의 톱니바퀴(설정) 버튼을 누릅니다.",
+        "[정보관리] > [회원탈퇴]로 이동해 탈퇴를 진행합니다.",
+        "네이버 계정으로 가입한 경우, 탈퇴 후 네이버(PC 기준)에서 로그인 > [내정보] > [보안설정] > [외부 사이트 연결] > FLO > 연결 해제를 진행합니다.",
+        "카카오 계정으로 가입한 경우, 탈퇴 후 카카오톡(앱 기준)에서 [설정] > [개인/보안] > [카카오계정] > [연결된 서비스 관리] > [외부 서비스] > FLO > 연결 끊기를 진행합니다."
+      ],
+      "prerequisites": [
+        "탈퇴 시 청취 데이터, 좋아요 목록 등 개인 데이터가 FLO에서 삭제 처리됩니다.",
+        "이용권을 구매한 경우 전자상거래법에 따라 상품 정보, 아이디, 거래 내역 등 기본 정보가 탈퇴 후 5년간 보관됩니다."
+      ],
+      "official_source_url": "https://www.music-flo.com/help/faq/4/1",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "yes24",
+      "display_name": "YES24",
+      "canonical_domain": "yes24.com",
+      "sender_domain_aliases": [
+        "yes24.com"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://www.yes24.com/Member/FTMypageMain.aspx",
+      "steps": [
+        "PC: 예스24에 로그인한 뒤 마이페이지에 접속합니다.",
+        "나의정보 > 회원탈퇴 메뉴에서 안내된 정보를 확인합니다.",
+        "탈퇴 사유와 비밀번호를 입력하면 회원 탈퇴가 완료됩니다.",
+        "모바일 앱/웹: 마이페이지 > 회원정보 > 비밀번호 입력 > 맨 하단 회원탈퇴 > 탈퇴 사유와 비밀번호 입력."
+      ],
+      "prerequisites": [
+        "회원탈퇴 즉시 계좌내역(YES포인트, YES머니, 예치금 등)이 모두 삭제되며 재가입해도 복원되지 않습니다. 탈퇴 전에 포인트를 사용하고 예치금은 계좌로 환불받으세요.",
+        "예치금은 예치기간이 따로 없고 회원 탈퇴(계약해지) 시 소멸됩니다. 중고샵 판매 정산금이 예치금으로 남아 있다면 반드시 먼저 출금하세요.",
+        "중고샵 주문이나 정산이 진행 중이면 탈퇴할 수 없습니다. 회원탈퇴 시 중고샵 판매계정과 판매자회원 자격은 자동으로 상실됩니다.",
+        "재화 등의 거래가 완료되지 않았거나, 마이너스 머니 및 마이너스 포인트 등 회사에 대한 채무가 남아 있으면 탈퇴가 제한됩니다.",
+        "탈퇴 시 YES블로그 계정과 블로그에 연결된 이용기록(상품리뷰 등)이 모두 삭제됩니다. 다만 게시판형 서비스에 등록한 게시물은 삭제되지 않고 그대로 유지됩니다.",
+        "회원탈퇴 후 30일간은 재가입이 불가능합니다."
+      ],
+      "identity_verification": "탈퇴 화면에서 비밀번호를 입력합니다.",
+      "official_source_url": "https://www.yes24.com/Mall/Help/FAQ?faqGb=35",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "kyobobook",
+      "display_name": "교보문고",
+      "canonical_domain": "kyobobook.co.kr",
+      "sender_domain_aliases": [
+        "kyobobook.co.kr"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://mmbr.kyobobook.co.kr/login",
+      "steps": [
+        "WEB(PC): 로그인 후 마이 > 회원정보 > 회원정보 수정 > 회원탈퇴로 이동합니다.",
+        "APP(모바일): 마이 > 회원정보 수정 > 회원탈퇴로 이동합니다.",
+        "탈퇴 사유를 입력하고 확인을 누르면 탈퇴가 완료됩니다.",
+        "직접 탈퇴가 어려운 경우 고객센터(1544-1900) 또는 1:1상담으로 문의한 뒤, 개인정보(정정·삭제) 요구서 양식을 작성해 FAX(0502-987-5711)로 보내면 확인 후 처리됩니다."
+      ],
+      "prerequisites": [
+        "회원탈퇴 시 모든 회원정보와 할인쿠폰, 통합포인트, 마일리지, 교환권, 교보캐시, 이벤트 교보e캐시, 구매내역이 자동으로 삭제되며 복구가 불가합니다.",
+        "자동 삭제되어 복구할 수 없는 항목: 회원정보, 상품구매, eBook 콘텐츠, 할인쿠폰, 마일리지, 통합포인트, 예치금, 교보e캐시 등의 모든 내역. 탈퇴 전에 포인트와 캐시를 모두 사용하세요.",
+        "주문 건에 따른 후속처리에 대비해, 최근 1달 내 구매내역이 있으면 탈퇴가 불가합니다.",
+        "탈퇴 후 동일 아이디로의 재가입은 허용되지 않습니다.",
+        "회원탈퇴 시 SNS 로그인 연동 정보도 자동 해지됩니다."
+      ],
+      "identity_verification": "탈퇴 사유를 입력한 뒤 확인 단계를 거칩니다. 본인이 아닌 대리 요청 시에는 위임장을 함께 제출해야 합니다.",
+      "official_source_url": "https://www.kyobobook.co.kr/cscenter/faq/01",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "aladin",
+      "display_name": "알라딘",
+      "canonical_domain": "aladin.co.kr",
+      "sender_domain_aliases": [
+        "aladin.co.kr"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://www.aladin.co.kr/account/wlogin.aspx",
+      "steps": [
+        "나의계정에 로그인합니다.",
+        "회원탈퇴를 신청하면 신청과 동시에 즉시 처리됩니다."
+      ],
+      "prerequisites": [
+        "탈퇴 시 알라딘에 등록한 개인정보와 주문내역, 알라딘 통장 내역이 모두 자동 삭제됩니다. 신청과 동시에 즉시 처리되므로 되돌릴 수 없습니다.",
+        "알라딘 통장에는 마일리지, 적립금, 예치금, 알라딘 쿠폰이 포함됩니다. 탈퇴 전에 적립금을 사용하고 예치금은 은행 계좌로 출금하세요.",
+        "마일리지는 5천점 이상 누적 시에만 적립금으로 전환할 수 있으므로, 전환하지 못한 마일리지는 탈퇴와 함께 사라집니다."
+      ],
+      "official_source_url": "https://www.aladin.co.kr/cs_center/wcs_guide_detail.aspx?pn=account_01",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "cgv",
+      "display_name": "CGV",
+      "canonical_domain": "cgv.co.kr",
+      "sender_domain_aliases": [
+        "cgv.co.kr"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://www.cjone.com/cjmweb/member/withdrawal.do",
+      "steps": [
+        "CGV 회원가입은 CJ ONE 회원가입을 전제로 하므로, 계정을 실제로 정리하려면 CJ ONE 회원을 탈퇴해야 합니다.",
+        "CJ ONE 회원탈퇴는 e-mail, 전화, 앱, 홈페이지 고객센터 1:1 상담기능, 또는 서비스 내에 제공되는 회원탈퇴 기능으로 요청할 수 있습니다.",
+        "CJ ONE 회원을 탈퇴하거나 CJ ONE 회원 자격을 상실하면 CGV에서도 자동으로 회원 탈퇴 처리됩니다.",
+        "CGV 서비스만 정리하고 싶다면 CGV에서 탈퇴(약관철회)를 신청할 수 있으나, 이 경우 CJ ONE 회원 자격은 그대로 유지됩니다."
+      ],
+      "prerequisites": [
+        "CGV에서만 탈퇴하면 CJ ONE 회원은 유지되고 CGV 서비스 이용만 제한됩니다. 개인정보와 포인트는 CJ ONE에 그대로 남으므로, 계정을 실제로 없애려면 CJ ONE 탈퇴가 필요합니다.",
+        "CJ ONE을 탈퇴하면 적립된 CJ ONE 포인트가 유예기간 이후 소멸됩니다. 탈퇴 요청일 전까지 가용 포인트를 모두 사용하세요.",
+        "CJ PAY 등을 통해 유상으로 충전한 포인트가 남아 있으면 계좌로 인출하거나 모두 사용한 뒤에야 탈퇴할 수 있습니다.",
+        "CGV나 CJ ONE 제휴사에서 구매하거나 예약한 물품 및 서비스가 배송 중이거나 아직 실현되지 않은 경우, 구매를 취소하거나 배송이 완료된 이후에 탈퇴할 수 있습니다. 아직 관람하지 않은 예매 건이 있다면 먼저 정리하세요.",
+        "포인트 사용 후 구매 취소로 마이너스 포인트가 발생한 경우, 해당 금액을 변제하거나 승인을 받기 전까지 탈퇴할 수 없습니다.",
+        "CJ ONE이 제공하는 개별 서비스 약관에 동의한 회원은 해당 서비스 탈퇴가 완료된 이후에 CJ ONE 회원 탈퇴가 가능합니다.",
+        "CJ ONE 탈퇴일로부터 30일 이내에는 재가입이 불가합니다. 다만 이 기간 중 제휴카드를 발급하면 회원탈퇴가 자동 취소됩니다.",
+        "CGV 회원이 자발적으로 탈퇴하거나 자격을 상실한 경우, 탈퇴 또는 상실된 날로부터 1개월간 CGV 회원가입이 불가합니다."
+      ],
+      "grace_period": "CJ ONE 탈퇴 완료 통보일로부터 30일의 유예 기간 동안 기 적립된 포인트 정보가 소멸되지 않고 보관됩니다. 이 기간 안에 별도 절차를 거쳐 재가입이 승인되면 모든 포인트를 다시 사용할 수 있고, 재가입 없이 유예기간이 지나면 모든 포인트가 즉시 소멸됩니다.",
+      "official_source_url": "https://www.cjone.com/cjmweb/terms.do",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "megabox",
+      "display_name": "메가박스",
+      "canonical_domain": "megabox.co.kr",
+      "sender_domain_aliases": [
+        "megabox.co.kr"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://www.megabox.co.kr/mypage",
+      "steps": [
+        "회원 본인이 사이트, 메가박스 고객센터, 또는 E-MAIL 등 회사가 정하는 방법으로 회원탈퇴를 요청합니다.",
+        "요청이 접수되면 회사가 회원 탈퇴에 필요한 제반 절차를 수행합니다."
+      ],
+      "prerequisites": [
+        "회원 탈퇴 시 적립된 메가박스 멤버십 포인트 및 쿠폰 등은 모두 삭제됩니다. 탈퇴 전에 포인트를 모두 사용하세요.",
+        "회원 탈퇴 시 이벤트 부정 이용 방지 등을 위하여 탈퇴일로부터 30일 이내에는 재가입이 불가합니다.",
+        "서비스를 1년 이상 이용하지 않으면 휴면 상태로 전환됩니다. 휴면 전환은 탈퇴가 아니므로 계정과 개인정보는 그대로 남아 있습니다.",
+        "휴면계정은 홈페이지나 앱에서 로그인 후 본인 인증을 하거나 ID/PW 찾기에서 본인 인증을 하면 활동 계정으로 복구됩니다. 복구는 1년 동안 가능하며, 그 기간이 지나면 탈퇴 처리되고 개인정보는 파기됩니다."
+      ],
+      "official_source_url": "https://www.megabox.co.kr/support/terms",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "yanolja",
+      "display_name": "야놀자",
+      "canonical_domain": "yanolja.com",
+      "sender_domain_aliases": [
+        "yanolja.com"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://nol.yanolja.com/mypage",
+      "steps": [
+        "간편 로그인 회원: 마이페이지 > NOL 계정 관리 > NOL 회원 탈퇴 > 간편 로그인 계정 인증 > 유의사항 확인 및 사유 선택 > NOL 회원 탈퇴하기 선택.",
+        "이메일 회원: 마이페이지 > NOL 계정 관리 > NOL 회원 탈퇴 > 유의사항 확인 및 사유 선택 > NOL 회원 탈퇴하기 선택."
+      ],
+      "prerequisites": [
+        "탈퇴 시 현재 보유 중인 모든 혜택과 포인트, 쿠폰이 소멸됩니다. 탈퇴 전에 모두 사용하세요.",
+        "NOL 회원을 탈퇴하면 NOL, NOL 인터파크투어, NOL 티켓, 트리플의 모든 서비스와 혜택을 더 이상 이용할 수 없습니다.",
+        "이용 중인 예약 내역이 있거나 이용 제한 계정인 경우 탈퇴가 불가할 수 있습니다.",
+        "게시글, 이용 후기, 댓글은 탈퇴 후에도 자동 삭제되지 않고 그대로 남아 있습니다. 삭제를 원하는 게시글이 있다면 먼저 삭제한 뒤 탈퇴하세요.",
+        "탈퇴 시 유료 가입 서비스(NOL 캔슬프리, NOL 티켓 TOPING)를 이용할 수 없으며, 재가입하더라도 복구되지 않습니다.",
+        "탈퇴 시 취소 및 계정 복구는 불가하며, 삭제된 데이터는 복구되지 않습니다.",
+        "탈퇴 시 7일간 동일 이메일로 신규 가입이 불가하며, 동일한 명의로 본인 인증을 진행할 수 없습니다."
+      ],
+      "identity_verification": "간편 로그인으로 가입한 회원은 탈퇴 과정에서 간편 로그인 계정 인증을 진행합니다.",
+      "official_source_url": "https://board.yanolja.com/faq/content/index.html?id=129",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "goodchoice",
+      "display_name": "여기어때",
+      "canonical_domain": "goodchoice.kr",
+      "sender_domain_aliases": [
+        "goodchoice.kr",
+        "yeogi.com"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://platform.yeogi.com/login",
+      "steps": [
+        "로그인 후 [내 정보] > [내 정보 관리] 메뉴로 이동합니다.",
+        "[내 정보] > [내 정보 관리] > [회원탈퇴]를 통해 회원 탈퇴를 진행합니다.",
+        "탈퇴를 요청하면 회사가 신속하게 회원탈퇴를 처리합니다."
+      ],
+      "prerequisites": [
+        "회원 탈퇴 시 무상으로 제공된 쿠폰 및 포인트는 모두 소멸합니다. 탈퇴 전에 모두 사용하세요.",
+        "회원을 탈퇴한 경우 재가입 방지를 위해 24시간 동안 이메일 주소가 보관된 후 파기되며, 회원자격 상실 후 24시간이 경과하지 않으면 재가입할 수 없습니다.",
+        "12개월 이상 로그인하지 않으면 회원정보의 보호 및 운영의 효율성을 위해 이용이 제한될 수 있습니다. 이용 제한은 탈퇴가 아니므로 계정과 개인정보는 그대로 남아 있습니다."
+      ],
+      "official_source_url": "https://www.yeogi.com/policy/terms",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "musinsa",
+      "display_name": "무신사",
+      "canonical_domain": "musinsa.com",
+      "sender_domain_aliases": [
+        "musinsa.com"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://www.musinsa.com/mypage",
+      "steps": [
+        "모바일(앱/웹): 마이 > 오른쪽 위 톱니바퀴 > 설정 > 회원정보 변경으로 이동합니다.",
+        "비밀번호를 입력한 뒤 회원탈퇴를 선택해 직접 신청합니다."
+      ],
+      "prerequisites": [
+        "회원 탈퇴 시 그때까지 사용하지 않은 무신사 적립금은 즉시 소멸되며, 탈퇴 후 재가입하거나 다시 로그인하더라도 복구되지 않습니다. 탈퇴 전에 모두 사용하세요.",
+        "회원 탈퇴 시 사용하지 않은 무신사 포인트도 즉시 소멸되며, 탈퇴 처리가 완료된 계정에 부여된 할인쿠폰도 즉시 소멸됩니다.",
+        "회원 탈퇴는 통합서비스 계정정보에 전부 적용됩니다. 29CM 적립금도 회원 탈퇴 시 즉시 소멸되므로 함께 확인하세요.",
+        "진행 중인 주문 건이 있는 경우 탈퇴가 가능하지 않습니다.",
+        "회사와의 분쟁이 진행 중이거나, 완결되지 아니한 거래가 있거나, 미지급채무가 남아 있는 경우 회사가 회원탈퇴 처리를 한시적으로 유보할 수 있습니다.",
+        "회원 탈퇴 시 무신사 페이는 자동으로 탈퇴되고, 솔드아웃 앱에서 무신사 아이디로 로그인이 가능하지 않습니다.",
+        "탈퇴하지 않더라도 무신사에 마지막으로 로그인한 날로부터 1년이 경과하면 무신사 적립금이 즉시 소멸됩니다.",
+        "회원 탈퇴 시 동일한 휴대폰 명의로 재가입은 탈퇴 30일 이후에 가능합니다. 탈퇴 후 재가입 시 가입 혜택으로 제공되는 쿠폰 발급이 가능하지 않습니다."
+      ],
+      "identity_verification": "회원정보 변경 단계에서 비밀번호를 입력합니다.",
+      "grace_period": "탈퇴 신청일로부터 5일이 지나야 탈퇴가 완료됩니다. 탈퇴 신청일로부터 5일 내에 다시 로그인하면 탈퇴 신청이 취소됩니다.",
+      "official_source_url": "https://www.musinsa.com/cs/faq?mainCategory=000",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "oliveyoung",
+      "display_name": "올리브영",
+      "canonical_domain": "oliveyoung.co.kr",
+      "sender_domain_aliases": [
+        "oliveyoung.co.kr"
+      ],
+      "category": "shopping",
+      "deletion_route": "self_service",
+      "url": "https://www.oliveyoung.co.kr/store/login/loginForm.do",
+      "steps": [
+        "PC: 로그인 후 마이페이지 > 마이정보 > 회원탈퇴 메뉴로 이동합니다.",
+        "App(버전 3.6.0 이상): 마이페이지 > 설정 > 회원탈퇴 메뉴로 이동합니다.",
+        "CJ ONE 통합회원까지 탈퇴하려면 CJ ONE 홈페이지에서 별도로 탈퇴해야 합니다."
+      ],
+      "prerequisites": [
+        "회원 탈퇴 시 보유 중인 올리브 포인트는 자동으로 소멸되며, 다시 회원으로 가입하더라도 복원되지 않습니다. 탈퇴 전에 모두 사용하세요.",
+        "올리브영 회원 탈퇴는 올리브영 회원 자격의 종료를 의미하며, CJ ONE 통합회원 자격은 그대로 유지됩니다. 올리브영만 탈퇴하면 개인정보와 CJ ONE 포인트는 CJ ONE에 그대로 남습니다.",
+        "CJ ONE 통합회원 탈퇴 요청은 올리브영에서 처리할 수 없으며, CJ ONE 서비스 운영사인 씨제이올리브네트웍스 주식회사에 직접 요청해야 합니다. 다만 CJ ONE 통합회원 탈퇴 시 올리브영 회원에서도 자동으로 탈퇴됩니다.",
+        "CJ ONE 포인트의 적립 및 사용 기준은 CJ ONE 서비스 이용약관을 따르므로, 올리브영만 탈퇴하는 경우와 CJ ONE까지 탈퇴하는 경우의 결과가 다릅니다.",
+        "마이너스(-) 포인트가 있는 경우 회사는 정산이 완료될 때까지 회원 탈퇴 요청을 거절할 수 있습니다.",
+        "처리 중인 주문이나 문의가 있을 경우 탈퇴가 불가능할 수 있습니다.",
+        "올리브영 회원만 탈퇴한 경우에는 바로 재가입이 가능하지만, CJ ONE 통합회원을 탈퇴한 경우에는 탈퇴 후 30일 이후에 재가입이 가능합니다."
+      ],
+      "official_source_url": "https://www.oliveyoung.co.kr/store/company/terms.do",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "daangn",
+      "display_name": "당근",
+      "canonical_domain": "daangn.com",
+      "sender_domain_aliases": [
+        "daangn.com"
+      ],
+      "category": "community",
+      "deletion_route": "self_service",
+      "url": "https://www.daangn.com/wv/faqs/38",
+      "steps": [
+        "당근 앱에서 '나의 당근'으로 이동합니다.",
+        "화면 하단의 '고객지원'을 선택합니다.",
+        "'탈퇴하기'를 눌러 탈퇴를 진행합니다.",
+        "탈퇴 후 7일 동안은 재가입할 수 없습니다."
+      ],
+      "prerequisites": [
+        "탈퇴하면 모든 게시글, 채팅 내용, 매너온도, 관심, 활동정보가 삭제되고 복구할 수 없습니다.",
+        "당근페이 계정이 있다면 먼저 당근페이 계정을 탈퇴해야 합니다.",
+        "연결된 비즈프로필이 있다면 삭제하거나 권한을 양도해야 합니다.",
+        "남은 광고 캐시가 있다면 환불받아야 합니다.",
+        "중고차 딜러의 경우 수수료 정산, 명의 이전 등 필수 의무사항을 모두 이행한 후에 계정을 삭제할 수 있습니다."
+      ],
+      "official_source_url": "https://www.daangn.com/wv/faqs/38",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "line",
+      "display_name": "라인",
+      "canonical_domain": "line.me",
+      "sender_domain_aliases": [
+        "line.me"
+      ],
+      "category": "social",
+      "deletion_route": "self_service",
+      "url": "https://help.line.me/line/smartphone/sp?contentId=20000121&lang=ko",
+      "steps": [
+        "LINE 앱 홈에서 '설정'을 엽니다.",
+        "'계정'을 선택합니다.",
+        "'LINE 탈퇴'를 선택한 뒤 '다음'을 누릅니다.",
+        "'LINE 탈퇴'를 다시 선택하고 '삭제'를 누르면 탈퇴가 완료됩니다."
+      ],
+      "prerequisites": [
+        "LINE Pay에 가입한 경우, 먼저 LINE Pay 계정을 해지한 후에 탈퇴해야 합니다.",
+        "탈퇴하면 보유한 유료 아이템, 친구 및 그룹, 대화 내용, 게임 등의 연동 앱 정보를 포함한 모든 데이터가 삭제됩니다.",
+        "계정 삭제 후에는 정보를 복원하거나 이전할 수 없으며, 서브 기기로도 로그인할 수 없습니다.",
+        "앱을 삭제하거나 재설치하는 것만으로는 계정이 삭제되지 않습니다. 반드시 설정에서 탈퇴를 진행해야 합니다."
+      ],
+      "official_source_url": "https://help.line.me/line/smartphone/sp?contentId=20000121&lang=ko",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "band",
+      "display_name": "밴드",
+      "canonical_domain": "band.us",
+      "sender_domain_aliases": [
+        "band.us"
+      ],
+      "category": "community",
+      "deletion_route": "self_service",
+      "url": "https://help.band.us/faq/account-issue",
+      "steps": [
+        "밴드 앱에서 '설정'으로 이동합니다.",
+        "'서비스 탈퇴' 메뉴를 선택합니다.",
+        "안내에 따라 계정 탈퇴를 진행합니다."
+      ],
+      "prerequisites": [
+        "가입한 개별 밴드에서 나가는 '밴드 탈퇴'와 계정 자체를 삭제하는 '서비스 탈퇴'는 서로 다릅니다. 계정을 삭제하려면 설정의 '서비스 탈퇴'를 이용해야 합니다."
+      ],
+      "official_source_url": "https://help.band.us/faq/account-issue",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "instagram",
+      "display_name": "인스타그램",
+      "canonical_domain": "instagram.com",
+      "sender_domain_aliases": [
+        "instagram.com"
+      ],
+      "category": "social",
+      "deletion_route": "self_service",
+      "url": "https://help.instagram.com/139886812848894/?locale=ko_KR",
+      "steps": [
+        "왼쪽 하단에서 '더 보기'를 클릭한 다음 '설정'을 클릭합니다.",
+        "'계정 센터'를 클릭한 다음 '계정 관리'를 클릭합니다.",
+        "삭제하려는 계정 유형 옆의 '관리'를 클릭합니다.",
+        "'비활성화 또는 삭제'를 클릭합니다.",
+        "영구적으로 삭제하려는 계정을 클릭합니다.",
+        "'계정 삭제'를 클릭한 다음 '계속'을 클릭하고 안내에 따라 작업을 확인합니다.",
+        "계정 센터 화면 구성에 따라 '개인정보 > 계정 소유권 및 관리 > 비활성화 또는 삭제' 경로로 표시될 수도 있습니다."
+      ],
+      "prerequisites": [
+        "'계정 비활성화'와 '계정 삭제'는 다릅니다. 비활성화는 일시적으로 활동을 중단하는 조치이므로, 영구 삭제를 원한다면 반드시 '계정 삭제'를 선택해야 합니다.",
+        "계정을 삭제하기 전에 사진, 게시물 등 내 정보를 내보내야 합니다. 계정을 삭제한 후에는 내 정보 내보내기 도구에 접근할 수 없습니다.",
+        "계정을 삭제하면 프로필, 사진, 동영상, 댓글, 좋아요, 팔로워가 영구적으로 삭제됩니다.",
+        "계정 센터에 Facebook 계정이 함께 연결되어 있더라도, 삭제 단계에서 삭제할 계정을 직접 선택합니다. 두 계정을 모두 삭제하려면 각각 삭제해야 합니다.",
+        "보안상의 이유로 Instagram이 회원님을 대신해 계정을 삭제해줄 수 없습니다. 삭제를 요청하려면 계정에 로그인할 수 있어야 합니다."
+      ],
+      "identity_verification": "계정에 직접 로그인할 수 있어야 합니다. 보안상의 이유로 Instagram이 대신 계정을 삭제해주지 않습니다.",
+      "grace_period": "계정 삭제 요청 후 30일이 경과하면 계정과 모든 정보가 영구적으로 삭제됩니다. 삭제 과정이 완료되기까지는 최대 90일이 소요될 수 있습니다. 삭제를 취소할 수 있는 기간은 지역별로 다릅니다.",
+      "official_source_url": "https://help.instagram.com/139886812848894/?locale=ko_KR",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "facebook",
+      "display_name": "페이스북",
+      "canonical_domain": "facebook.com",
+      "sender_domain_aliases": [
+        "facebook.com",
+        "facebookmail.com"
+      ],
+      "category": "social",
+      "deletion_route": "self_service",
+      "url": "https://www.facebook.com/help/224562897555674/?locale=ko_KR",
+      "steps": [
+        "Facebook 오른쪽 상단의 프로필 사진을 클릭합니다.",
+        "'설정 및 개인정보'를 선택한 다음 '설정'을 클릭합니다.",
+        "화면 왼쪽 상단의 '계정 센터'를 클릭합니다.",
+        "'계정 관리'를 클릭합니다.",
+        "삭제하려는 계정 유형 옆의 '관리'를 클릭합니다.",
+        "'비활성화 또는 삭제'를 클릭합니다.",
+        "'계속'을 클릭한 다음 안내에 따라 작업을 확인합니다."
+      ],
+      "prerequisites": [
+        "'계정 비활성화'와 '계정 영구 삭제'는 다릅니다. 비활성화는 사진, 게시물, 동영상이 삭제되지 않고 Messenger도 계속 사용할 수 있는 일시적 조치이므로, 영구 삭제를 원한다면 반드시 삭제를 선택해야 합니다.",
+        "계정을 삭제하기 전에 사진, 게시물 등 본인의 정보를 내보내세요. 계정이 삭제된 후에는 어떤 항목도 가져올 수 없습니다.",
+        "계정을 삭제하면 프로필, 사진, 게시물, 동영상 등 추가한 모든 콘텐츠가 영구적으로 삭제되고 다시 활성화할 수 없습니다.",
+        "Facebook 계정으로 가입한 다른 앱(Spotify, Pinterest 등)에서 Facebook 로그인을 사용할 수 없게 됩니다. 계정을 복구하려면 해당 앱 및 웹사이트에 별도로 문의해야 할 수 있습니다.",
+        "Facebook 계정으로 Meta Quest에 로그인하는 경우, 앱 구매 및 업적을 포함한 Meta Quest 정보도 함께 삭제되고 기존 스토어 크레딧도 소멸됩니다.",
+        "계정 센터에서 삭제할 계정 유형을 직접 선택합니다. 연결된 Instagram 계정까지 없애려면 해당 계정도 별도로 삭제해야 합니다."
+      ],
+      "grace_period": "삭제한 날짜로부터 30일이 경과하기 전까지는 로그인 후 '삭제 취소'를 클릭해 계정 삭제를 취소할 수 있습니다. 30일이 경과하면 계정과 모든 정보가 영구적으로 삭제됩니다. 삭제 과정 시작 후 모든 게시물이 삭제되기까지는 최대 90일이 소요될 수 있습니다. 삭제를 취소할 수 있는 기간은 지역별로 다릅니다.",
+      "official_source_url": "https://www.facebook.com/help/224562897555674/?locale=ko_KR",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "nexon",
+      "display_name": "넥슨",
+      "canonical_domain": "nexon.com",
+      "sender_domain_aliases": [
+        "nexon.com"
+      ],
+      "category": "other",
+      "deletion_route": "self_service",
+      "url": "https://cs.nexon.com/helpBoard/popuphelpview/14057",
+      "steps": [
+        "넥슨 홈페이지 왼쪽 위 '메뉴'를 선택한 뒤 아래쪽 '내정보'를 선택합니다.",
+        "'계정정보'를 선택하고 페이지 가장 아래의 '탈퇴하기'를 클릭합니다.",
+        "비밀번호를 입력한 후 탈퇴 주의사항 확인에 체크하고 '회원 탈퇴' 버튼을 클릭합니다."
+      ],
+      "prerequisites": [
+        "넥슨 이메일ID를 사용 중인데 이메일 인증을 할 수 없는 경우, [넥슨ID변경] 메뉴에서 이메일ID를 변경한 후 진행합니다."
+      ],
+      "identity_verification": "탈퇴 진행 시 비밀번호를 입력해 본인을 확인합니다.",
+      "grace_period": "탈퇴 신청일로부터 15일간 유예기간이 적용되며, 15일이 경과해야 탈퇴처리가 완료되어 넥슨ID 정보가 완전히 삭제됩니다. 유예기간 동안에는 탈퇴한 ID로 넥슨 홈페이지에 로그인한 뒤 [회원탈퇴 취소] 버튼을 클릭해 탈퇴를 취소할 수 있습니다. 유예기간은 삭제하거나 조절할 수 없으며, 탈퇴를 취소한 뒤 다시 탈퇴하면 유예기간이 늘어날 수 있습니다.",
+      "official_source_url": "https://cs.nexon.com/helpBoard/popuphelpview/14057",
+      "last_verified_at": "2026-07-15",
+      "review_due_at": "2026-08-15"
+    },
+    {
+      "service_id": "steam",
+      "display_name": "Steam",
+      "canonical_domain": "steampowered.com",
+      "sender_domain_aliases": [
+        "steampowered.com"
+      ],
+      "category": "other",
+      "deletion_route": "contact_form",
+      "url": "https://help.steampowered.com/wizard/HelpDeleteAccount",
+      "steps": [
+        "Steam 고객지원의 계정 삭제 요청 페이지에 접속해 Steam 계정으로 로그인합니다.",
+        "Steam 고객지원에 계정과 관련 정보 전체의 삭제를 요청합니다.",
+        "Steam 고객지원이 요구하는 포괄적인 소유권 증명(Proof of Ownership) 자료를 제출합니다.",
+        "검토가 완료되면 계정은 30일간 구매 및 커뮤니티 기능이 제한된 상태로 삭제 대기열에 들어가며, 30일이 지나면 삭제됩니다."
+      ],
+      "prerequisites": [
+        "계정 삭제는 영구적입니다. 게임 라이선스, 커뮤니티 프로필, 선물, 인벤토리 아이템, 지갑 잔액 등 관련 정보가 영구적으로 삭제되며 복구할 수 없습니다.",
+        "Steam 지갑과 그 안의 잔액은 계정이 삭제되면 더 이상 사용할 수 없습니다.",
+        "계정을 삭제해도 구매 내역이 자동으로 환불되지 않습니다. 삭제 전에 고객지원 사이트에서 환불 가능한 구매에 대해 환불을 신청하세요.",
+        "이미 등록한 CD 키는 계정을 삭제해도 다른 계정에서 다시 사용할 수 없습니다.",
+        "커뮤니티 프로필이 삭제되어 아바타, 스크린샷, 아트워크, 별명 기록을 더 이상 볼 수 없습니다. 보관하고 싶은 자료가 있다면 삭제를 요청하기 전에 저장해야 합니다.",
+        "계정 이름은 고유하며, 계정을 삭제하더라도 다시 사용할 수 없습니다.",
+        "삭제 대기 중인 30일 동안에는 VAC 서버가 필요한 게임을 플레이할 수 없고, 계정이 삭제된 후에는 Steam 계정이 필요한 게임을 플레이할 수 없습니다."
+      ],
+      "identity_verification": "Steam 고객지원이 계정 소유자임을 확인하기 위해 포괄적인 소유권 증명(Proof of Ownership)을 요구합니다.",
+      "grace_period": "삭제 요청 후 30일 이내에는 Steam 계정에 로그인해 페이지 상단의 빨간색 알림을 열고 '취소' 버튼을 클릭해 삭제를 취소할 수 있습니다. 30일이 끝날 때 알림이 제공됩니다. 일단 삭제가 완료되면 계정과 관련 정보는 복구할 수 없습니다.",
+      "official_source_url": "https://help.steampowered.com/en/faqs/view/21A6-7C93-6CFE-100B",
       "last_verified_at": "2026-07-15",
       "review_due_at": "2026-08-15"
     }

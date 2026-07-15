@@ -136,7 +136,9 @@ describe("catalog staleness and schema", () => {
 
   it("every catalog entry has required fields and valid enums", () => {
     assert.ok(Array.isArray(catalog.services));
-    assert.ok(catalog.services.length >= 8 && catalog.services.length <= 12);
+    // Was 8..12, sized for the seed catalog. The Korean expansion took it to 46, and the
+    // bound is a floor against silent truncation rather than a cap on growth.
+    assert.ok(catalog.services.length >= 40, `too few entries: ${catalog.services.length}`);
     for (const entry of catalog.services) {
       assert.ok(entry.service_id);
       assert.ok(entry.official_source_url?.startsWith("http"));
@@ -151,6 +153,41 @@ describe("catalog staleness and schema", () => {
       catalog.services.some((s) => s.deletion_route === "public_service"),
       "need at least one public_service"
     );
+  });
+
+  it("no em/en-dash in copy that reaches the screen", () => {
+    // steps/prerequisites/grace_period render straight into the guide modal. The seed entries
+    // carried four of these; the rule is worth nothing if it is not enforced.
+    const fields = ["display_name", "steps", "prerequisites", "identity_verification", "grace_period"];
+    for (const entry of catalog.services) {
+      for (const f of fields) {
+        const v = entry[f];
+        const text = Array.isArray(v) ? v.join(" ") : typeof v === "string" ? v : "";
+        assert.doesNotMatch(text, /[—–]/, `${entry.service_id}.${f}`);
+      }
+    }
+  });
+
+  it("covers the Korean services this product exists for", () => {
+    // The gap that made the catalog useless here: JustDeleteMe carries 2,562 services and
+    // exactly one genuinely Korean one, so the long tail had to be verified by hand.
+    const domains = new Set(catalog.services.flatMap((s) => s.sender_domain_aliases || []));
+    for (const d of ["coupang.com", "baemin.com", "toss.im", "daangn.com", "melon.com", "musinsa.com"]) {
+      assert.ok(domains.has(d), `missing ${d}`);
+    }
+    const kr = catalog.services.filter((s) =>
+      (s.sender_domain_aliases || []).some((a) => a.endsWith(".kr") || a.endsWith(".com"))
+    );
+    assert.ok(kr.length >= 40, `expected a real Korean catalog, got ${kr.length}`);
+  });
+
+  it("facebookmail.com resolves to facebook, the alias a real scan proved we needed", () => {
+    // 269 messages in the pilot scan came from facebookmail.com, which does not reduce to
+    // facebook.com and so never matched. Meta publishes this domain itself.
+    const entry = matchService("facebookmail.com", catalog);
+    assert.ok(entry);
+    assert.equal(entry.service_id, "facebook");
+    assert.equal(matchService("facebook.com", catalog).service_id, "facebook");
   });
 
   it("sender_domain_aliases are unique registrable domains", () => {
