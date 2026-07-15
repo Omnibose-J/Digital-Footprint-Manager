@@ -1,6 +1,12 @@
 /** Sender reduction + signal classification. Browser ESM; no bundler. */
 
 import { defaultRules } from "./filter.rules.js";
+import { authVerdict } from "./authenticity.js";
+import {
+  computeDiscoveryScore,
+  computeLikelyClosed,
+  signupTierFromPhrase,
+} from "./score.js";
 
 const FAMILIES = [
   "signup",
@@ -11,16 +17,6 @@ const FAMILIES = [
   "closure",
   "unknown",
 ];
-
-const FAMILY_STRENGTH = {
-  signup: 55,
-  auth: 45,
-  transaction: 30,
-  notification: 15,
-  closure: 10,
-  marketing: 5,
-  unknown: 0,
-};
 
 /** Trim, strip only surrounding quotes, unescape quoted-string, drop C0/C1 controls. */
 function cleanDisplayName(rawName) {
@@ -155,7 +151,8 @@ export function classifyMessage(
       const needle = normalizeSubject(phrase);
       if (needle && normalized.includes(needle)) {
         matchedRules.push(`subject:${family}:${phrase}`);
-        return { family, matchedRules };
+        const signupTier = family === "signup" ? signupTierFromPhrase(phrase) : null;
+        return { family, matchedRules, signupTier };
       }
     }
   }
@@ -163,18 +160,18 @@ export function classifyMessage(
   const labels = Array.isArray(labelIds) ? labelIds : [];
   if (labels.includes(rules.CATEGORY_PURCHASES)) {
     matchedRules.push("category:purchases");
-    return { family: "transaction", matchedRules };
+    return { family: "transaction", matchedRules, signupTier: null };
   }
   if (labels.includes(rules.CATEGORY_PROMOTIONS)) {
     matchedRules.push("category:promotions");
-    return { family: "marketing", matchedRules };
+    return { family: "marketing", matchedRules, signupTier: null };
   }
   if (labels.includes(rules.CATEGORY_UPDATES)) {
     matchedRules.push("category:updates");
-    return { family: "notification", matchedRules };
+    return { family: "notification", matchedRules, signupTier: null };
   }
 
-  return { family: "unknown", matchedRules };
+  return { family: "unknown", matchedRules, signupTier: null };
 }
 
 function monthFromInternalDate(internalDate) {
@@ -205,14 +202,15 @@ function emptyFamilies() {
   return out;
 }
 
-function strongestEvidence(families) {
-  let best = 0;
-  for (const f of FAMILIES) {
-    if ((families[f]?.count || 0) > 0) {
-      best = Math.max(best, FAMILY_STRENGTH[f] ?? 0);
-    }
-  }
-  return best;
+function emptyScoreBuckets() {
+  return {
+    signupVerificationMonths: new Set(),
+    signupWelcomeMonths: new Set(),
+    authMonths: new Set(),
+    transactionMonths: new Set(),
+    notificationMonths: new Set(),
+    hasMarketing: false,
+  };
 }
 
 function lastSeenMonthFromFamilies(families) {
@@ -278,6 +276,7 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
   const byKey = new Map();
   let messages = 0;
   let unknownFamily = 0;
+  let unauthenticatedMessages = 0;
 
   function ensureService(key, normalized) {
     let svc = byKey.get(key);
@@ -292,6 +291,7 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
         messageCount: 0,
         families: emptyFamilies(),
         headerFeatures: emptyHeaderFeatures(),
+        scoreBuckets: emptyScoreBuckets(),
       };
       byKey.set(key, svc);
     }
@@ -303,7 +303,7 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
     const headers = message?.headers || {};
     const normalized = normalizeSender(headers.from, rules);
 
-    const { family } = classifyMessage(
+    const { family, signupTier } = classifyMessage(
       {
         labelIds: message.labelIds || [],
         subject: headers.subject,
@@ -334,6 +334,29 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
     if (month && !bucket.months.includes(month)) {
       bucket.months.push(month);
       bucket.months.sort();
+    }
+
+    // R2/G2: gate zeroes score contribution only — never evidence or recency.
+    const gate = authVerdict(headers.authenticationResults, normalized.registrableDomain);
+    if (!gate.pass) {
+      unauthenticatedMessages += 1;
+    } else if (month || family === "marketing") {
+      const sb = svc.scoreBuckets;
+      if (family === "signup") {
+        if (signupTier === "verification") {
+          if (month) sb.signupVerificationMonths.add(month);
+        } else if (month) {
+          sb.signupWelcomeMonths.add(month);
+        }
+      } else if (family === "auth" && month) {
+        sb.authMonths.add(month);
+      } else if (family === "transaction" && month) {
+        sb.transactionMonths.add(month);
+      } else if (family === "notification" && month) {
+        sb.notificationMonths.add(month);
+      } else if (family === "marketing") {
+        sb.hasMarketing = true;
+      }
     }
 
     if (headers.listUnsubscribe) svc.headerFeatures.listUnsubscribe += 1;
@@ -421,6 +444,16 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
         count: src.count,
       };
     }
+    const sb = svc.scoreBuckets || emptyScoreBuckets();
+    const scored = computeDiscoveryScore({
+      signupVerificationMonths: [...sb.signupVerificationMonths],
+      signupWelcomeMonths: [...sb.signupWelcomeMonths],
+      authMonths: [...sb.authMonths],
+      transactionMonths: [...sb.transactionMonths],
+      notificationMonths: [...sb.notificationMonths],
+      hasMarketing: sb.hasMarketing,
+    });
+    const likelyClosed = computeLikelyClosed(families);
     const links = linkFields(svc.registrableDomain, hiddenRule);
     return {
       key: svc.key, // stable identity across snapshots; registrableDomain is not unique
@@ -437,6 +470,13 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
       linkBlockedBy: links.linkBlockedBy,
       verdict,
       hiddenRule,
+      discoveryScore: scored.discoveryScore,
+      discoveryBand: scored.discoveryBand,
+      familyScores: scored.familyScores,
+      scoreExplanation: scored.scoreExplanation,
+      topContributors: scored.topContributors,
+      likelyClosed,
+      userStatus: null,
     };
   }
 
@@ -453,8 +493,8 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
     }
 
     services.sort((a, b) => {
-      const sa = strongestEvidence(a.families);
-      const sb = strongestEvidence(b.families);
+      const sa = a.discoveryScore || 0;
+      const sb = b.discoveryScore || 0;
       if (sb !== sa) return sb - sa;
       return b.messageCount - a.messageCount;
     });
@@ -471,6 +511,7 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
         hidden: hidden.length,
         unresolved: unresolved.length,
         unknownFamily,
+        unauthenticatedMessages,
       },
     };
   }

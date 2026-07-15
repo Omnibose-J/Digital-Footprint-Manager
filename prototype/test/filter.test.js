@@ -341,3 +341,159 @@ describe("SOW 003 R4 applyUserVerdict", () => {
     assert.ok(!domains.includes("brand-shop.com"));
   });
 });
+
+function passArs(domain) {
+  return `mx.google.com; dkim=pass header.d=${domain}; dmarc=pass header.from=${domain}`;
+}
+
+function failArs(domain) {
+  return `mx.google.com; dmarc=fail header.from=${domain}`;
+}
+
+describe("SOW 004 filter integration (gate + score + verdict)", () => {
+  it("absent Authentication-Results → unauthenticatedMessages +1; evidence kept (R2)", () => {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(
+      msg({
+        from: "Brand <hello@brand-shop.com>",
+        subject: "회원가입이 완료되었습니다",
+        internalDate: String(Date.UTC(2024, 0, 10)),
+      })
+    );
+    const snap = agg.snapshot();
+    assert.equal(snap.stats.unauthenticatedMessages, 1);
+    assert.equal(snap.services.length, 1);
+    assert.equal(snap.services[0].discoveryScore, 0);
+    assert.ok(snap.services[0].lastSeenMonth); // recency kept (G2)
+    assert.equal(snap.services[0].families.signup.count, 1);
+  });
+
+  it("forged signup failing gate → 0 score, still in candidate + lastSeenMonth (R2/G2)", () => {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(
+      msg({
+        from: "Phish <hello@brand-shop.com>",
+        subject: "회원가입이 완료되었습니다",
+        internalDate: String(Date.UTC(2024, 0, 10)),
+        headers: { authenticationResults: failArs("brand-shop.com") },
+      })
+    );
+    const snap = agg.snapshot();
+    assert.equal(snap.services.length, 1);
+    assert.equal(snap.services[0].discoveryScore, 0);
+    assert.equal(snap.services[0].families.signup.count, 1);
+    assert.ok(snap.services[0].lastSeenMonth);
+    assert.ok(snap.stats.unauthenticatedMessages >= 1);
+  });
+
+  it("authenticated verification + reset → 90 high", () => {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(
+      msg({
+        from: "S <n@brand-shop.com>",
+        subject: "이메일 인증이 완료되었습니다",
+        internalDate: String(Date.UTC(2024, 0, 10)),
+        headers: { authenticationResults: passArs("brand-shop.com") },
+      })
+    );
+    agg.add(
+      msg({
+        from: "S <n@brand-shop.com>",
+        subject: "비밀번호 재설정 안내",
+        internalDate: String(Date.UTC(2024, 1, 10)),
+        headers: { authenticationResults: passArs("brand-shop.com") },
+      })
+    );
+    const s = agg.snapshot().services[0];
+    assert.equal(s.discoveryScore, 90);
+    assert.equal(s.discoveryBand, "high");
+  });
+
+  it("closure newer than positive → likelyClosed", () => {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(
+      msg({
+        from: "S <n@brand-shop.com>",
+        subject: "회원가입이 완료되었습니다",
+        internalDate: String(Date.UTC(2023, 0, 10)),
+        headers: { authenticationResults: passArs("brand-shop.com") },
+      })
+    );
+    agg.add(
+      msg({
+        from: "S <n@brand-shop.com>",
+        subject: "회원탈퇴가 완료되었습니다",
+        internalDate: String(Date.UTC(2024, 5, 10)),
+        headers: { authenticationResults: passArs("brand-shop.com") },
+      })
+    );
+    assert.equal(agg.snapshot().services[0].likelyClosed, true);
+  });
+
+  it("closure older than positive → not likelyClosed", () => {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(
+      msg({
+        from: "S <n@brand-shop.com>",
+        subject: "회원탈퇴가 완료되었습니다",
+        internalDate: String(Date.UTC(2023, 0, 10)),
+        headers: { authenticationResults: passArs("brand-shop.com") },
+      })
+    );
+    agg.add(
+      msg({
+        from: "S <n@brand-shop.com>",
+        subject: "회원가입이 완료되었습니다",
+        internalDate: String(Date.UTC(2024, 5, 10)),
+        headers: { authenticationResults: passArs("brand-shop.com") },
+      })
+    );
+    assert.equal(agg.snapshot().services[0].likelyClosed, false);
+  });
+
+  it("unsure on a 90-point candidate → band review (R6)", () => {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(
+      msg({
+        from: "S <n@brand-shop.com>",
+        subject: "이메일 인증이 완료되었습니다",
+        internalDate: String(Date.UTC(2024, 0, 10)),
+        headers: { authenticationResults: passArs("brand-shop.com") },
+      })
+    );
+    agg.add(
+      msg({
+        from: "S <n@brand-shop.com>",
+        subject: "비밀번호 재설정 안내",
+        internalDate: String(Date.UTC(2024, 1, 10)),
+        headers: { authenticationResults: passArs("brand-shop.com") },
+      })
+    );
+    const snap = agg.snapshot();
+    const key = snap.services[0].key;
+    assert.equal(snap.services[0].discoveryScore, 90);
+    const out = applyUserVerdict(snap, new Map([[key, "unsure"]]));
+    assert.equal(out.services[0].discoveryBand, "review");
+    assert.equal(out.services[0].discoveryScore, 90);
+  });
+
+  it("owned on a low-score candidate does not lower score (G6)", () => {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(
+      msg({
+        from: "S <n@brand-shop.com>",
+        subject: "주간 안내",
+        labelIds: ["CATEGORY_UPDATES"],
+        internalDate: String(Date.UTC(2024, 0, 10)),
+        headers: { authenticationResults: passArs("brand-shop.com") },
+      })
+    );
+    const snap = agg.snapshot();
+    const before = snap.services[0].discoveryScore;
+    assert.ok(before <= 15);
+    const out = applyUserVerdict(snap, new Map([[snap.services[0].key, "owned"]]));
+    assert.equal(out.services[0].userStatus, "owned");
+    assert.equal(out.services[0].discoveryScore, before);
+    assert.ok(out.services[0].confirmed);
+  });
+});

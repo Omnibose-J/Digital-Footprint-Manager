@@ -93,13 +93,36 @@
         padding: 4px 8px;
         font-size: 12px;
       }
-      .not-mine-btn {
+      .not-mine-btn,
+      .confirm-btn,
+      .unsure-btn {
         padding: 4px 8px;
         font-size: 12px;
       }
       .guide-open-btn {
         padding: 4px 8px;
         font-size: 12px;
+      }
+      .badge-band {
+        font-weight: 600;
+      }
+      .badge-high {
+        color: #0a7;
+      }
+      .badge-review {
+        color: #a70;
+      }
+      .badge-low {
+        color: #666;
+      }
+      .badge-owned {
+        color: #06c;
+      }
+      .badge-closed {
+        color: #844;
+      }
+      tr.row-closed td {
+        color: #777;
       }
       .guide-modal {
         position: fixed;
@@ -220,11 +243,12 @@
             <th>#</th>
             <th>서비스</th>
             <th>도메인</th>
+            <th>신뢰</th>
             <th>증거</th>
             <th>최근 증거</th>
             <th>건수</th>
             <th>탈퇴</th>
-            <th>내 계정 아님</th>
+            <th>확인</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>

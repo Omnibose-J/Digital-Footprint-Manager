@@ -56,7 +56,13 @@ let lastSnapshot = null;
  * because each progress tick hands us a fresh snapshot that knows nothing about user input.
  * Session-only — a reload resets it (no persistence in this SOW).
  */
-const userVerdict = new Map(); // 'candidate' | 'not_mine'
+const userVerdict = new Map(); // 'owned' | 'not_mine' | 'unsure' | 'candidate'
+
+const BAND_LABEL = {
+  high: "높음",
+  review: "검토",
+  low: "낮음",
+};
 let abortScan = null;
 let gmailAccessToken = null;
 let hiddenOpen = false;
@@ -96,6 +102,9 @@ function serviceCell(s) {
 }
 
 function deletionCell(s, index) {
+  if (s.likelyClosed && s.userStatus !== "owned") {
+    return `<span class="badge badge-closed">폐쇄 추정</span>`;
+  }
   const label =
     s.linkSafety === "verified"
       ? isStale(s.catalogEntry || {})
@@ -103,6 +112,26 @@ function deletionCell(s, index) {
         : "탈퇴"
       : "탈퇴 안내";
   return `<button type="button" class="guide-open-btn" data-guide="${index}">${label}</button>`;
+}
+
+function bandCell(s) {
+  const band = s.discoveryBand || "low";
+  const score = s.discoveryScore ?? 0;
+  const expl = s.scoreExplanation || `${score}점`;
+  const owned = s.userStatus === "owned" ? ` <span class="badge badge-owned">내 계정</span>` : "";
+  const closed =
+    s.likelyClosed && s.userStatus !== "owned"
+      ? ` <span class="badge badge-closed">폐쇄 추정</span>`
+      : "";
+  return `<span class="badge badge-band badge-${escapeHtml(band)}">${escapeHtml(BAND_LABEL[band] || band)}</span> ${escapeHtml(String(score))} · ${escapeHtml(expl)}${owned}${closed}`;
+}
+
+function confirmCell(index) {
+  return [
+    `<button type="button" class="confirm-btn" data-owned="${index}">내 계정</button>`,
+    `<button type="button" class="not-mine-btn" data-not-mine="${index}">아님</button>`,
+    `<button type="button" class="unsure-btn" data-unsure="${index}">모르겠음</button>`,
+  ].join(" ");
 }
 
 function withCatalog(rawSnapshot) {
@@ -120,15 +149,16 @@ function renderSnapshot(rawSnapshot) {
   rows.innerHTML = services
     .map(
       (s, i) =>
-        `<tr>
+        `<tr class="${s.likelyClosed && s.userStatus !== "owned" ? "row-closed" : ""}">
           <td>${i + 1}</td>
           <td>${serviceCell(s)}</td>
           <td>${escapeHtml(s.registrableDomain || "")}</td>
+          <td>${bandCell(s)}</td>
           <td>${evidenceBadges(s.families)}</td>
           <td>${escapeHtml(s.lastSeenMonth || "—")}</td>
           <td>${s.messageCount}</td>
           <td>${deletionCell(s, i)}</td>
-          <td><button type="button" class="not-mine-btn" data-not-mine="${i}">내 계정 아님</button></td>
+          <td>${confirmCell(i)}</td>
         </tr>`
     )
     .join("");
@@ -336,6 +366,24 @@ hiddenRows?.addEventListener("click", (ev) => {
 });
 
 rows?.addEventListener("click", (ev) => {
+  const ownedBtn = ev.target.closest("[data-owned]");
+  if (ownedBtn && lastSnapshot) {
+    const idx = Number(ownedBtn.getAttribute("data-owned"));
+    const item = lastSnapshot.services[idx];
+    if (!item?.key) return;
+    userVerdict.set(item.key, "owned");
+    renderSnapshot(lastSnapshot);
+    return;
+  }
+  const unsureBtn = ev.target.closest("[data-unsure]");
+  if (unsureBtn && lastSnapshot) {
+    const idx = Number(unsureBtn.getAttribute("data-unsure"));
+    const item = lastSnapshot.services[idx];
+    if (!item?.key) return;
+    userVerdict.set(item.key, "unsure");
+    renderSnapshot(lastSnapshot);
+    return;
+  }
   const notMineBtn = ev.target.closest("[data-not-mine]");
   if (notMineBtn && lastSnapshot) {
     const idx = Number(notMineBtn.getAttribute("data-not-mine"));
@@ -419,6 +467,11 @@ scanBtn?.addEventListener("click", async () => {
       finalSnap.stats.messages > 0
         ? ((finalSnap.stats.unknownFamily / finalSnap.stats.messages) * 100).toFixed(1)
         : "0.0";
+    const bands = { high: 0, review: 0, low: 0 };
+    for (const s of finalSnap.services) {
+      bands[s.discoveryBand] = (bands[s.discoveryBand] || 0) + 1;
+    }
+    const closedN = finalSnap.services.filter((s) => s.likelyClosed).length;
 
     progressEl.textContent = `완료: ${result.fetched} / ${result.scannedIds}${result.unlimited ? " (전체)" : ""}`;
     meta.textContent = [
@@ -427,8 +480,11 @@ scanBtn?.addEventListener("click", async () => {
       `헤더 조회: ${result.fetched}`,
       `에러: ${result.errors}`,
       `후보 ${finalSnap.stats.services}`,
+      `높음 ${bands.high} · 검토 ${bands.review} · 낮음 ${bands.low}`,
+      `폐쇄추정 ${closedN}`,
       `제외 ${finalSnap.stats.hidden}`,
       `미해결 ${finalSnap.stats.unresolved}`,
+      `unauthenticated ${finalSnap.stats.unauthenticatedMessages}/${finalSnap.stats.messages}`,
       `unknownFamily ${finalSnap.stats.unknownFamily}/${finalSnap.stats.messages} (${unknownShare}%)`,
     ].join(" · ");
   } catch (e) {

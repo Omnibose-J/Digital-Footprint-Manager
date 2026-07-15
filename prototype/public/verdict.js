@@ -3,15 +3,19 @@
  *
  * Pure by design, and separate from app.js on purpose: every progress tick replaces the snapshot,
  * so this has to re-run on each render, and it has to be testable without a DOM.
+ *
+ * CandidateStatus (PRODUCT_SPEC §3 / SOW 004 R6): owned | not_mine | unsure | (restore) candidate
  */
 
 /**
  * @param {any} snapshot aggregator snapshot
- * @param {Map<string, 'candidate'|'not_mine'>} verdicts keyed by ServiceCandidate.key
+ * @param {Map<string, 'owned'|'not_mine'|'unsure'|'candidate'>} verdicts keyed by ServiceCandidate.key
  */
 export function applyUserVerdict(snapshot, verdicts) {
   if (!snapshot) return snapshot;
-  if (!verdicts || verdicts.size === 0) return snapshot;
+  if (!verdicts || verdicts.size === 0) {
+    return annotateDefaults(snapshot);
+  }
 
   let services = [...(snapshot.services || [])];
   let hidden = [...(snapshot.hidden || [])];
@@ -19,7 +23,12 @@ export function applyUserVerdict(snapshot, verdicts) {
 
   services = services.filter((s) => {
     if (verdicts.get(s.key) !== "not_mine") return true;
-    hidden.push({ ...s, verdict: "hidden", hiddenRule: "not_mine" });
+    hidden.push({
+      ...s,
+      verdict: "hidden",
+      hiddenRule: "not_mine",
+      userStatus: "not_mine",
+    });
     return false;
   });
 
@@ -27,13 +36,25 @@ export function applyUserVerdict(snapshot, verdicts) {
   const pullToServices = (bucket) =>
     bucket.filter((s) => {
       if (verdicts.get(s.key) !== "candidate") return true;
-      services.push({ ...s, verdict: "candidate", hiddenRule: null });
+      services.push({
+        ...s,
+        verdict: "candidate",
+        hiddenRule: null,
+        userStatus: null,
+      });
       return false;
     });
   hidden = pullToServices(hidden);
   unresolved = pullToServices(unresolved);
 
-  services.sort((a, b) => b.messageCount - a.messageCount);
+  services = services.map((s) => applyStatus(s, verdicts.get(s.key)));
+
+  services.sort((a, b) => {
+    const sa = a.discoveryScore || 0;
+    const sb = b.discoveryScore || 0;
+    if (sb !== sa) return sb - sa;
+    return b.messageCount - a.messageCount;
+  });
   hidden.sort((a, b) => b.messageCount - a.messageCount);
   unresolved.sort((a, b) => b.messageCount - a.messageCount);
 
@@ -47,5 +68,45 @@ export function applyUserVerdict(snapshot, verdicts) {
       hidden: hidden.length,
       unresolved: unresolved.length,
     },
+  };
+}
+
+function annotateDefaults(snapshot) {
+  return {
+    ...snapshot,
+    services: (snapshot.services || []).map((s) => ({
+      ...s,
+      userStatus: s.userStatus ?? null,
+    })),
+  };
+}
+
+/**
+ * owned: confirmed; score never lowered (G6).
+ * unsure: force band to review regardless of score (R6).
+ */
+function applyStatus(service, status) {
+  if (status === "owned") {
+    return {
+      ...service,
+      userStatus: "owned",
+      // Score number unchanged — override is confirmation, not a rewrite (G6).
+      discoveryScore: service.discoveryScore,
+      discoveryBand: service.discoveryBand,
+      confirmed: true,
+    };
+  }
+  if (status === "unsure") {
+    return {
+      ...service,
+      userStatus: "unsure",
+      discoveryBand: "review",
+      confirmed: false,
+    };
+  }
+  return {
+    ...service,
+    userStatus: status || service.userStatus || null,
+    confirmed: false,
   };
 }
