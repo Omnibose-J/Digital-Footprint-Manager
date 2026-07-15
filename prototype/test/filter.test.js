@@ -6,6 +6,7 @@ import {
   createAggregator,
   registrableDomainFromHost,
   parseFromHeader,
+  marketingHeaderWeight,
 } from "../frontend/filter.js";
 import { applyUserVerdict } from "../frontend/verdict.js";
 import { PAYMENT_GATEWAY_DOMAINS } from "../frontend/filter.rules.js";
@@ -78,13 +79,197 @@ describe("R5 classifyMessage", () => {
   });
 
   it("List-Unsubscribe alone does not force marketing", () => {
+    // Weight 1 of a required 3. Receipts carry List-Unsubscribe too, and §3 forbids reading any
+    // single header as a binary classifier. Notification is the lenient landing spot.
     const r = classifyMessage({
       subject: "주간 소식입니다",
       labelIds: [],
       headers: { listUnsubscribe: "<mailto:unsub@example.com>" },
     });
-    assert.equal(r.family, "unknown");
+    assert.equal(r.family, "notification");
     assert.notEqual(r.family, "marketing");
+  });
+});
+
+describe("SPEC §3 header signals as weighted marketing features", () => {
+  it("weight accumulates and only corroboration crosses the threshold", () => {
+    const weak = marketingHeaderWeight({ listUnsubscribe: "<mailto:u@e.com>" });
+    const alsoWeak = marketingHeaderWeight({
+      listUnsubscribe: "<mailto:u@e.com>",
+      listUnsubscribePost: "List-Unsubscribe=One-Click",
+    });
+    const enough = marketingHeaderWeight({
+      listUnsubscribe: "<mailto:u@e.com>",
+      listId: "<news.example.com>",
+    });
+    assert.equal(weak, 1);
+    assert.equal(alsoWeak, 2);
+    assert.equal(enough, 3);
+  });
+
+  it("List-Id + List-Unsubscribe → marketing", () => {
+    const r = classifyMessage({
+      subject: "이번 주 새 소식",
+      labelIds: [],
+      headers: {
+        listId: "<newsletter.example.com>",
+        listUnsubscribe: "<mailto:unsub@example.com>",
+      },
+    });
+    assert.equal(r.family, "marketing");
+  });
+
+  it("Precedence: bulk + List-Unsubscribe → marketing", () => {
+    const r = classifyMessage({
+      subject: "이번 주 새 소식",
+      labelIds: [],
+      headers: { precedence: "bulk", listUnsubscribe: "<mailto:u@example.com>" },
+    });
+    assert.equal(r.family, "marketing");
+  });
+
+  it("RFC 8058 one-click alone stays under the threshold (Google does not forbid it on receipts)", () => {
+    const r = classifyMessage({
+      subject: "안내드립니다",
+      labelIds: [],
+      headers: { listUnsubscribePost: "List-Unsubscribe=One-Click" },
+    });
+    assert.equal(r.family, "notification");
+  });
+
+  it("Auto-Submitted: auto-generated → notification; 'no' means a human sent it (RFC 3834)", () => {
+    const auto = classifyMessage({
+      subject: "안내드립니다",
+      labelIds: [],
+      headers: { autoSubmitted: "auto-generated" },
+    });
+    assert.equal(auto.family, "notification");
+
+    const human = classifyMessage({
+      subject: "안내드립니다",
+      labelIds: [],
+      headers: { autoSubmitted: "no" },
+    });
+    assert.equal(human.family, "unknown");
+  });
+
+  it("a subject rule still outranks every header (headers are the last resort)", () => {
+    const r = classifyMessage({
+      subject: "이메일 인증이 완료되었습니다",
+      labelIds: [],
+      headers: { listId: "<x.example.com>", precedence: "bulk" },
+    });
+    assert.equal(r.family, "signup");
+    assert.equal(r.signupTier, "verification");
+  });
+
+  it("no headers and no rule → still unknown, never invented", () => {
+    const r = classifyMessage({ subject: "안내드립니다", labelIds: [], headers: {} });
+    assert.equal(r.family, "unknown");
+  });
+});
+
+describe("Gmail category labels", () => {
+  it("CATEGORY_SOCIAL → notification (facebookmail.com scored 0 on 269 messages without this)", () => {
+    const r = classifyMessage({ subject: "새로운 알림이 있습니다", labelIds: ["CATEGORY_SOCIAL"] });
+    assert.equal(r.family, "notification");
+  });
+
+  it("CATEGORY_FORUMS → notification", () => {
+    const r = classifyMessage({ subject: "새 댓글", labelIds: ["CATEGORY_FORUMS"] });
+    assert.equal(r.family, "notification");
+  });
+
+  it("CATEGORY_PROMOTIONS → marketing", () => {
+    const r = classifyMessage({ subject: "특가", labelIds: ["CATEGORY_PROMOTIONS"] });
+    assert.equal(r.family, "marketing");
+  });
+
+  it("a category outranks headers but not a subject rule", () => {
+    const promo = classifyMessage({
+      subject: "무슨 소식",
+      labelIds: ["CATEGORY_PROMOTIONS"],
+      headers: { autoSubmitted: "auto-generated" },
+    });
+    assert.equal(promo.family, "marketing");
+  });
+});
+
+describe("Korean subject matching", () => {
+  it("탈퇴 survives inconsistent spacing", () => {
+    const spaced = classifyMessage({ subject: "회원 탈퇴가 완료되었습니다", labelIds: [] });
+    const tight = classifyMessage({ subject: "회원탈퇴가 완료되었습니다", labelIds: [] });
+    assert.equal(spaced.family, "closure");
+    assert.equal(tight.family, "closure");
+  });
+
+  it("a subject that despaces a phrase in the table still matches", () => {
+    // These need the despaced comparison specifically: the rule carries a space the subject
+    // drops, so plain containment misses. Korean services write it both ways.
+    const cases = [
+      ["회원가입완료 안내드립니다", "signup"], // rule: "회원가입 완료"
+      ["탈퇴완료 안내", "closure"], // rule: "탈퇴 완료"
+      ["결제완료 안내", "transaction"], // rule: "결제 완료"
+      ["휴면 계정 전환 안내", "notification"], // rule: "휴면계정"
+    ];
+    for (const [subject, family] of cases) {
+      assert.equal(classifyMessage({ subject, labelIds: [] }).family, family, subject);
+    }
+  });
+
+  it("closure outranks transaction: 환불 must not steal a withdrawal confirmation", () => {
+    const r = classifyMessage({
+      subject: "[쿠팡] 회원탈퇴 처리 완료 및 환불 안내",
+      labelIds: [],
+    });
+    assert.equal(r.family, "closure");
+  });
+
+  it("signup outranks closure: re-signup must not mark a live account closed", () => {
+    const r = classifyMessage({ subject: "탈퇴 후 재가입이 완료되었습니다", labelIds: [] });
+    assert.equal(r.family, "signup");
+  });
+
+  it("조사 없는 명사구 제목도 잡는다", () => {
+    const cases = [
+      ["결제 완료 안내", "transaction"],
+      ["주문 완료 안내", "transaction"],
+      ["배송 완료 안내", "transaction"],
+      ["임시 비밀번호 발급 안내", "auth"],
+      ["비밀번호가 변경되었습니다", "auth"],
+      ["예약이 완료되었습니다", "transaction"],
+      ["가입을 축하합니다", "signup"],
+    ];
+    for (const [subject, family] of cases) {
+      assert.equal(classifyMessage({ subject, labelIds: [] }).family, family, subject);
+    }
+  });
+
+  it("휴면/이용내역/약관 안내는 회원에게만 가므로 미분류로 흘리지 않는다", () => {
+    const cases = [
+      "휴면계정 전환 안내",
+      "장기 미접속 회원 개인정보 분리보관 안내",
+      "개인정보 이용내역 안내",
+      "이용약관 개정 안내",
+    ];
+    for (const subject of cases) {
+      assert.equal(classifyMessage({ subject, labelIds: [] }).family, "notification", subject);
+    }
+  });
+
+  it("본인인증/계좌인증은 signup verification 55점이 아니다 (게스트 결제)", () => {
+    const cases = [
+      "본인인증이 완료되었습니다",
+      "계좌 인증이 완료되었습니다",
+      "휴대폰 인증이 완료되었습니다",
+    ];
+    for (const subject of cases) {
+      const r = classifyMessage({ subject, labelIds: [] });
+      assert.notEqual(r.signupTier, "verification", subject);
+    }
+    // The one that must still land.
+    const real = classifyMessage({ subject: "이메일 인증이 완료되었습니다", labelIds: [] });
+    assert.equal(real.signupTier, "verification");
   });
 });
 

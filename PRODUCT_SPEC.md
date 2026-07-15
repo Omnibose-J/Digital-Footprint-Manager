@@ -112,13 +112,15 @@ Evidence is scored per family with a cap, so repetition inside one family cannot
 |---|---|---:|
 | Signup/verification | Verification-complete ("이메일 인증 완료") 55; welcome/signup-complete 40 | 55 |
 | Auth/security | Password reset, login alert, OTP: 35 first, +10 for a second distinct month | 45 |
-| Transaction/subscription | 10 per distinct month; recurring renewals in >= 3 distinct months floor the family at 25 | 30 |
+| Transaction/subscription | 10 per distinct month | 30 |
 | Service notification (non-marketing) | 5 per distinct month | 15 |
 | Marketing | Flat 5; never contributes to `high` alone | 5 |
 
 `discoveryScore = min(100, sum of family scores)`. Bands: `high` >= 70, `review` 40-69, `low` <= 39.
 
-Worked examples: verification 55 + password reset 35 = 90 `high`. Welcome 40 + reset 35 = 75 `high`. Welcome alone = 40 `review` (misparse possible; needs corroboration or user confirmation). Recurring subscription 25 + notifications 15 = 40 `review` (guest checkout or family member's subscription remains possible — correctly not `high`).
+Worked examples: verification 55 + password reset 35 = 90 `high`. Welcome 40 + reset 35 = 75 `high`. Welcome alone = 40 `review` (misparse possible; needs corroboration or user confirmation). Recurring subscription 30 + notifications 15 = 45 `review` (guest checkout or family member's subscription remains possible — correctly not `high`).
+
+> **Amended 2026-07-15.** This table previously read "10 per distinct month; recurring renewals in >= 3 distinct months floor the family at 25", and the example scored that subscription 25. The two could not both hold, and the floor could never bind in the first place: three distinct months already scores 30, so a floor of 25 is unreachable. `score.js` had resolved the contradiction the other way, treating 25 as a ceiling, which made this table's own cap of 30 dead and left the family scoring only {0, 10, 20, 25}. That cost real candidates a band: welcome + receipts in four distinct months scored 65 `review` where the table says 70 `high`. The table now governs and the example's arithmetic moved 40 -> 45; its actual claim is unchanged, and transaction still cannot reach `high` without signup or auth (30 + 15 + marketing 5 = 50).
 
 **Classify marketing leniently — the two errors are not symmetric.** Calling transactional mail "marketing" strips it from `lastSeenMonth`, making an active account look dormant and pushing it toward a deletion recommendation: the worst failure mode. Calling marketing "transactional" only inflates recency, which makes an account look *alive* and trips the in-use guard — conservative. Discovery precision is protected separately by the flat-5 marketing cap (a newsletter-only sender maxes out in the `low` band and cannot become a high-confidence false positive), so there is nothing to gain by filtering aggressively. When a message is ambiguous, do not call it marketing.
 

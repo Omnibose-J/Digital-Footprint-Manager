@@ -77,12 +77,18 @@ export function computeDiscoveryScore(evidence = {}) {
     });
   }
 
-  // Transaction: 10 per month; ≥3 distinct months → recurring score 25 (worked example);
-  // cap 30.
+  // Transaction: 10 per distinct month, cap 30 — the §3 table, not the worked example.
+  //
+  // The two contradict each other and only one can hold. The table's "recurring renewals in
+  // >= 3 distinct months floor the family at 25" is already inoperative as written: 3 months
+  // scores 30 on its own, so a floor of 25 can never bind. Taking the example's 25 as a ceiling
+  // instead (what this used to do) made the table's own cap of 30 unreachable and left
+  // transaction ∈ {0,10,20,25}, which cost "welcome + receipts in 4 distinct months" its high
+  // band at 65. Following the table costs the example its arithmetic but not its conclusion:
+  // 30 + notifications 15 = 45 is still review, still "correctly not high", and transaction
+  // still cannot reach high without signup or auth (30 + 15 + marketing 5 = 50).
   if (transactionMonths.length > 0) {
-    let tx = 10 * transactionMonths.length;
-    if (transactionMonths.length >= 3) tx = 25;
-    familyScores.transaction = Math.min(30, tx);
+    familyScores.transaction = Math.min(30, 10 * transactionMonths.length);
     contributions.push({
       family: "transaction",
       key: "transaction",

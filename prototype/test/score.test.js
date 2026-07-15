@@ -30,12 +30,39 @@ describe("SOW 004 R3 discoveryScore", () => {
     assert.equal(r.discoveryBand, "review");
   });
 
-  it("recurring subscription (3 months) + notifications (3 months) → 40 review", () => {
+  it("recurring subscription (3 months) + notifications (3 months) → 45 review", () => {
+    // The §3 table (10/month, cap 30) and its worked example ("recurring subscription 25 +
+    // notifications 15 = 40") disagree. This follows the table, so the number moved 40 -> 45.
+    // The example's actual claim survives untouched: still review, still not high.
     const r = computeDiscoveryScore({
       transactionMonths: ["2024-01", "2024-02", "2024-03"],
       notificationMonths: ["2024-01", "2024-02", "2024-03"],
     });
-    assert.equal(r.discoveryScore, 40);
+    assert.equal(r.discoveryScore, 45);
+    assert.equal(r.discoveryBand, "review");
+  });
+
+  it("transaction reaches its cap of 30, which the worked example made unreachable", () => {
+    const four = computeDiscoveryScore({
+      transactionMonths: ["2024-01", "2024-02", "2024-03", "2024-04"],
+    });
+    assert.equal(four.familyScores.transaction, 30);
+    // The band this cost: welcome + receipts in 4 distinct months scored 65 review before.
+    const withWelcome = computeDiscoveryScore({
+      signupWelcomeMonths: ["2024-01"],
+      transactionMonths: ["2024-01", "2024-02", "2024-03", "2024-04"],
+    });
+    assert.equal(withWelcome.discoveryScore, 70);
+    assert.equal(withWelcome.discoveryBand, "high");
+  });
+
+  it("transaction alone can never reach high, cap or no cap", () => {
+    const r = computeDiscoveryScore({
+      transactionMonths: ["2024-01", "2024-02", "2024-03", "2024-04", "2024-05"],
+      notificationMonths: ["2024-01", "2024-02", "2024-03"],
+      hasMarketing: true,
+    });
+    assert.equal(r.discoveryScore, 50);
     assert.equal(r.discoveryBand, "review");
   });
 
