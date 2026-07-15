@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DFM — Gmail senders</title>
+    <style>
+      body {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        max-width: 720px;
+        margin: 24px auto;
+        padding: 0 16px;
+        line-height: 1.4;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin: 12px 0;
+      }
+      input[type="email"] {
+        flex: 1;
+        min-width: 220px;
+        padding: 8px 10px;
+      }
+      button {
+        padding: 8px 14px;
+        cursor: pointer;
+      }
+      #meta,
+      #status {
+        color: #444;
+        font-size: 14px;
+        margin: 8px 0;
+      }
+      #err {
+        color: #b00020;
+        white-space: pre-wrap;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 6px 8px;
+        border-bottom: 1px solid #ddd;
+        font-size: 14px;
+      }
+      th {
+        background: #f3f3f3;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Gmail 발신자 리스트</h1>
+    <p>스캔할 Gmail 주소를 입력한 뒤 Google 연결 → 발신자 불러오기. 전체 메일함을 스캔하며 리스트는 실시간으로 갱신됩니다.</p>
+
+    <div class="row">
+      <label for="email">이메일</label>
+      <input
+        id="email"
+        type="email"
+        placeholder="you@gmail.com"
+        autocomplete="email"
+      />
+      <button id="connect" type="button">Google 연결</button>
+      <button id="logout" type="button">연결 해제</button>
+    </div>
+
+    <div id="status"></div>
+    <div class="row">
+      <button id="load" type="button">발신자 불러오기</button>
+    </div>
+    <div id="progress" style="font-size: 14px; color: #1a1a1a; margin: 8px 0"></div>
+    <div id="meta"></div>
+    <div id="err"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>이름</th>
+          <th>이메일</th>
+          <th>건수</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <script src="./app.js"></script>
+  </body>
+</html>
