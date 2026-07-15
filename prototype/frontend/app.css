@@ -15,10 +15,18 @@
  */
 
 :root {
-  /* Their palette, verbatim. One accent, no rainbow: the four Google brand colours are locked
+  /* Provenance, since the file it came from is gone: these are Meta's product colours. The
+     teammate's build took them from a DESIGN.md in the repo root, a design.md-format analysis
+     of Meta's system ("saturated cobalt blue #0064E0 for in-product purchase actions"), which
+     shipped with the original MVP and was deleted once nothing referenced it. #1c1e21 is Meta's
+     body ink, #f1f4f7/#ced0d4 its greys, #31a24c/#e41e3f its green and red. Not authored here
+     and not the teammate's own, so treat them as borrowed and replaceable rather than a brand.
+
+     What survives on the merits: one accent, no rainbow. Google's four brand colours are locked
      to the "G" mark, and Security Checkup already reserved a four-colour ramp to mean severity.
-     The hue is also not Google's — this product asks to read a whole mailbox and then hands the
-     user off to third-party sites, so it must always be legible whose screen they are on. */
+     And the hue must not be Google's, whoever else it belongs to: this product asks to read a
+     whole mailbox and then hands the user off to third-party sites, so it has to stay legible
+     whose screen they are on. Meta's blue is nobody's idea of Google's. */
   --accent: #0064e0;
   --accent-hover: #0457cb;
   --accent-text: #0064e0;

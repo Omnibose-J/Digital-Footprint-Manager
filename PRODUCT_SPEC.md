@@ -308,6 +308,16 @@ Controls: just-in-time disclosure before OAuth; least privilege and incremental 
 
 ## 8. Decision Log
 
+### Benchmark: the category is empty, and its dead differ from its absent - 2026-07-15
+
+The market research this section keeps citing lived in `BENCHMARK.md`, deleted 2026-07-15 once nothing referenced it. Its load-bearing findings, so the citations below resolve:
+
+**The category is effectively empty, globally and in Korea.** "Find accounts from email evidence, then guide the withdrawal" has no living direct competitor. Mine, Deseat.me and Jumbo are all dead or acquired; the one survivor is a bundled McAfee+ feature with no Korean coverage.
+
+**They did not die of no demand.** Two causes: (1) consumer subscription economics — a chore a user performs once a year cannot carry a recurring price; (2) **the trust paradox** — a privacy product that demands full mailbox access is asking the user to accept the exact risk it promises to reduce. Our design answers both by construction: the scan runs in the browser and the server never receives mail (§3), and the shape is a one-time pass rather than a subscription.
+
+**Every rival processes server-side.** That is the differentiator no competitor currently matches, and it is why the browser-only boundary is not negotiable for convenience: giving it up does not make us a better competitor, it makes us the same product that already died.
+
 ### Decision: Descope to the core loop - 2026-07-15
 
 **Context:** v1 specified cleanup-priority scoring, breach-data integration, reminders, monetization, and a 7-state cleanup machine. The owner directed focus onto the core: find registered sites, guide deletion of unwanted ones.
