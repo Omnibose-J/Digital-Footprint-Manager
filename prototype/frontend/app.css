@@ -422,6 +422,9 @@ button {
 /* ---------- progress ---------- */
 
 .progress {
+  /* Clear of the controls: the buttons are a group, and status about what they started is not
+     part of it. min-height reserves the line so the bar below does not jump when text lands. */
+  margin-top: var(--s5);
   color: var(--ink-quiet);
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
