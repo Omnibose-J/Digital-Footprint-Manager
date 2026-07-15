@@ -386,7 +386,17 @@ Controls: just-in-time disclosure before OAuth; least privilege and incremental 
 
 **Rejected:** Shipping IMAP behind "we only read headers" (the credential we would hold grants everything, regardless of what we read). Waiting for a Naver mail API (none exists; none is announced).
 
-**Status:** Active
+**Amended 2026-07-15 — a concrete IMAP design was evaluated and does not clear this decision.** An implementation-ready design now exists (`NAVER_IMAP_DESIGN_deferred.md`: server-side ephemeral IMAP, FastAPI worker, envelope-encrypted credential in Redis at 15-minute TTL, `EXAMINE INBOX`, `BODY.PEEK` header-only fetch). It is technically sound and independently reaches this spec's own conclusions — Naver Login OAuth grants no mailbox access, IMAP is the only path, and its §36 warns against inferring signup from sender domain alone. Three objections survive it, none of which its security engineering touches:
+
+- **TTL and encryption bound leak risk, not authority.** A Naver app password opens SMTP as well as IMAP, so custody of it means the user handed us send-as rights — regardless of our decision to read only headers. Shortening the TTL does not change what the credential grants.
+- **It reproduces the externality that killed vault import** (see that decision above): teaching users to paste a Naver app password into a web form hands attackers a working phishing template, and the harm lands on people who never used this product. The design's own §25 error copy ("check that you entered an app password, not your normal password") concedes that confused users will send us their real Naver password, and §0's ban on collecting it is a UI label with no enforcing mechanism.
+- **It omits Naver's 90-day IMAP auto-disable** — a fact this decision already records — so the integration breaks with no user action and the design carries no failure mode for it.
+
+Its architecture also collides with §5 independently of the credential question: worker + queue + Redis + KMS and a 20-minute scan timeout restore exactly the infrastructure the reminder cut removed, and do not run on Vercel Functions.
+
+**Salvageable now, independent of mailbox provider:** its §14/§15 header rules apply to the Gmail path as-is — representative-address priority (`From` → `Sender` → `Return-Path`), multiple `From` addresses aggregated separately, RFC 2047 encoded-word decoding, no global plus-addressing or dot stripping, control-character stripping from display names.
+
+**Status:** Active — reaffirmed 2026-07-15 against a concrete design. Revival condition unchanged: pilot evidence on where Korean-service signup mail actually lands.
 
 ### Prior decisions (2026-07-15, all Active; full text in v1 archive)
 
