@@ -108,6 +108,13 @@
   box-sizing: border-box;
 }
 
+/* Reserve the scrollbar's lane whether or not it is there yet. Rows stream in during a scan, and
+   the moment the page outgrows the viewport the bar appears and shoves the whole layout sideways
+   by its own width. That shove is the other half of the twitch. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   padding: var(--s5) var(--s4) var(--s7);
@@ -118,11 +125,22 @@ body {
   /* Korean must not break mid-word. Their build had no rule here, which is why its hero read
      "Gmail 속 가입 서비 / 스를 찾아, 정리할 계 / 정은". */
   word-break: keep-all;
+  /* No background-attachment: fixed. It pins three gradients to the viewport, which means
+     repainting all three on every scroll frame; the atmosphere is not worth the jank. Anchoring
+     the linear stop to 100vh keeps the fade reading as the page's own, not the scroller's. */
   background:
     radial-gradient(circle at top left, rgba(0, 100, 224, 0.08), transparent 28%),
     radial-gradient(circle at top right, rgba(0, 145, 255, 0.08), transparent 24%),
-    linear-gradient(180deg, #ffffff 0%, #f6f8fb 100%);
-  background-attachment: fixed;
+    linear-gradient(180deg, #ffffff 0%, #f6f8fb 100vh);
+  background-repeat: no-repeat;
+  min-height: 100vh;
+}
+
+/* The modal is position:fixed, so without this the page keeps scrolling behind it and the browser
+   shows two scrollbars fighting. Padding replaces the gutter the lock removes, or locking would
+   itself shift the layout it is meant to hold still. */
+body.modal-open {
+  overflow: hidden;
 }
 
 .shell {

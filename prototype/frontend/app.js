@@ -277,6 +277,7 @@ function openGuide(candidate, trigger) {
   });
   guideModal.classList.remove("hidden");
   guideModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
   guideClose?.focus();
 
   const copyBtn = document.getElementById("guideCopyBtn");
@@ -298,6 +299,7 @@ function closeGuide() {
   if (!guideModal) return;
   guideModal.classList.add("hidden");
   guideModal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
   if (guideBody) guideBody.innerHTML = "";
   const trigger = guideTrigger;
   guideTrigger = null;

@@ -178,6 +178,43 @@ test.describe("the scan a user actually sees", () => {
     await expect(modal).toBeHidden();
   });
 
+  test("the layout does not jump sideways when the scrollbar arrives", async ({ page }) => {
+    // Rows stream in during a scan. The moment the page outgrows the viewport the vertical bar
+    // appears, and without a reserved gutter it shoves everything left by its own width.
+    await page.setViewportSize({ width: 1280, height: 400 });
+    const before = await page.locator(".shell").evaluate((el) => el.getBoundingClientRect().left);
+    await runScan(page);
+    const after = await page.locator(".shell").evaluate((el) => el.getBoundingClientRect().left);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight)).toBe(true);
+    expect(after).toBe(before);
+  });
+
+  test("the modal locks the page behind it instead of scrolling two things at once", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 400 });
+    await runScan(page);
+    await page.locator("#rows tr", { hasText: "spotify.com" }).getByRole("button").click();
+    await expect(page.locator("#guideModal")).toBeVisible();
+    expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe("hidden");
+
+    await page.click("#guideClose");
+    expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).not.toBe("hidden");
+  });
+
+  test("the page never scrolls sideways, only the table does", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await runScan(page);
+    const m = await page.evaluate(() => {
+      const d = document.documentElement;
+      const w = document.querySelector("#appPanel .table-wrap");
+      return {
+        pageH: d.scrollWidth > d.clientWidth + 1,
+        tableScrollsInside: w.scrollWidth > w.clientWidth,
+      };
+    });
+    expect(m.pageH).toBe(false);
+    expect(m.tableScrollsInside).toBe(true);
+  });
+
   test("a closed account offers no withdrawal guide, only the badge", async ({ page }) => {
     // Found by the e2e on its first run, and it is correct: §3 marks likely_closed and excludes it
     // from the cleanup list, so deletionCell renders the badge in place of the button. Guiding
