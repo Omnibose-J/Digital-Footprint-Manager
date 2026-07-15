@@ -77,10 +77,10 @@
 
 ### 가입 이메일 찾기
 
-- **List-Unsubscribe 헤더 존재 여부** — RFC 표준 헤더라 언어에 상관없이 구독/커머셜 메일을 구조적으로 잡아냄 (Gmail API에서 메시지 헤더로 조회 가능)
 - **발신 도메인 클러스터링** — `noreply@`, `support@`, `notifications@` 등 발신 주소는 달라도 도메인 기준으로 묶으면 "서비스 단위" 식별이 됨
 - **해당 도메인에서 받은 첫 메일 날짜** = 가입 시점 proxy
-- Gmail 검색 연산자로 1차 필터링: `from:(noreply OR no-reply) OR has:list-unsubscribe`
+- **Gmail 자체 카테고리 분류 활용** — `category:updates`, `category:purchases`, `category:reservations`는 구글이 이미 계산해 둔 거래성 메일 분류라 언어에 무관하다. 1차 필터링 예: `from:(noreply OR no-reply) OR category:updates`
+- **List-Unsubscribe 헤더** — RFC 표준 헤더라 언어에 상관없이 구독/커머셜 메일 성격을 잡아냄. 단 **검색 연산자로는 쓸 수 없고**(Gmail은 임의 헤더 검색을 지원하지 않음 — `rfc822msgid:`, `deliveredto:`만 예외), 메시지를 가져온 뒤 헤더로 조회해 분류에만 쓴다.
 
 ### 장기 미사용 계정 판단
 
