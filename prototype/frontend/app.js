@@ -32,16 +32,6 @@ const guideBackdrop = el("guideBackdrop");
 const guideClose = el("guideClose");
 const guideBody = el("guideBody");
 
-const FAMILY_LABEL = {
-  signup: "가입",
-  auth: "인증",
-  transaction: "거래",
-  notification: "알림",
-  marketing: "마케팅",
-  closure: "탈퇴",
-  unknown: "미분류",
-};
-
 const RULE_LABEL = {
   self: "본인 주소",
   invalid_domain: "유효하지 않은 도메인",
@@ -77,17 +67,6 @@ let catalog = null;
 let guideTrigger = null;
 let sessionEmail = "";
 
-function evidenceBadges(families) {
-  const order = ["signup", "auth", "transaction", "notification", "closure", "marketing", "unknown"];
-  const parts = [];
-  for (const f of order) {
-    if ((families?.[f]?.count || 0) > 0) {
-      parts.push(`<span class="badge">${escapeHtml(FAMILY_LABEL[f] || f)}</span>`);
-    }
-  }
-  return parts.length ? `<span class="badges">${parts.join("")}</span>` : "—";
-}
-
 function serviceCell(s) {
   const name = escapeHtml(s.displayName || s.registrableDomain || "");
   if (s.siteUrl) {
@@ -113,8 +92,9 @@ function bandCell(s) {
   const band = s.discoveryBand || "low";
   const score = s.discoveryScore ?? 0;
   const expl = s.scoreExplanation || `${score}점`;
-  const closed = s.likelyClosed ? ` <span class="band band-closed">폐쇄 추정</span>` : "";
-  return `<span class="band band-${escapeHtml(band)}">${escapeHtml(BAND_LABEL[band] || band)} ${escapeHtml(String(score))}</span>${closed}<span class="score-why">${escapeHtml(expl)}</span>`;
+  // No 폐쇄 추정 badge here. deletionCell already renders it in place of the 탈퇴 button, which is
+  // where it belongs: it is an answer to "can I leave", not to "how sure are we you joined".
+  return `<span class="band band-${escapeHtml(band)}">${escapeHtml(BAND_LABEL[band] || band)} ${escapeHtml(String(score))}</span><span class="score-why">${escapeHtml(expl)}</span>`;
 }
 
 function withCatalog(rawSnapshot) {
@@ -123,27 +103,86 @@ function withCatalog(rawSnapshot) {
   return upgradeSnapshot(overridden, catalog);
 }
 
+function rowHtml(s, i) {
+  return `<td>${i + 1}</td>
+      <td class="cell-service">${serviceCell(s)}</td>
+      <td class="cell-domain">${escapeHtml(s.registrableDomain || "")}</td>
+      <td>${bandCell(s)}</td>
+      <td class="cell-month">${escapeHtml(s.lastSeenMonth || "—")}</td>
+      <td class="col-count">${s.messageCount}</td>
+      <td>${deletionCell(s, i)}</td>`;
+}
+
+/**
+ * Reconcile the table against the snapshot, keyed by ServiceCandidate.key.
+ *
+ * This used to be one `rows.innerHTML = ...`, which during a scan destroys and rebuilds every row
+ * roughly eight times a second for the length of the scan. That is what made the list twitch: the
+ * browser re-measured every column against fresh content on each rebuild, so widths jumped, and
+ * nothing on screen had an identity long enough to hover or animate.
+ *
+ * Keeping the <tr> alive and only writing cells that changed also makes the reorder legible. A row
+ * whose score just rose slides to its new rank instead of teleporting there, and that is the one
+ * moment during a scan where movement is information: it means the evidence for that service
+ * changed a second ago.
+ */
+function reconcileRows(services) {
+  const existing = new Map();
+  for (const tr of rows.children) existing.set(tr.dataset.key, tr);
+
+  // Measure before, so the move can be played from where each row actually was (FLIP).
+  const before = new Map();
+  for (const [key, tr] of existing) before.set(key, tr.getBoundingClientRect().top);
+
+  const frag = document.createDocumentFragment();
+  services.forEach((s, i) => {
+    let tr = existing.get(s.key);
+    if (!tr) {
+      tr = document.createElement("tr");
+      tr.dataset.key = s.key;
+    }
+    const html = rowHtml(s, i);
+    // Only touch the DOM when the row actually changed. Most ticks change nothing for most rows.
+    if (tr.dataset.html !== html) {
+      tr.innerHTML = html;
+      tr.dataset.html = html;
+    }
+    tr.classList.toggle("row-closed", Boolean(s.likelyClosed));
+    existing.delete(s.key);
+    frag.appendChild(tr);
+  });
+  for (const tr of existing.values()) tr.remove();
+  rows.appendChild(frag);
+
+  playRankMoves(before);
+}
+
+/** FLIP: invert each moved row to its old position, then let it transition home. */
+function playRankMoves(before) {
+  if (!before.size || prefersReducedMotion()) return;
+  for (const tr of rows.children) {
+    const from = before.get(tr.dataset.key);
+    if (from === undefined) continue;
+    const delta = from - tr.getBoundingClientRect().top;
+    if (!delta || Math.abs(delta) < 1) continue;
+    tr.animate(
+      [{ transform: `translateY(${delta}px)` }, { transform: "translateY(0)" }],
+      { duration: 320, easing: "cubic-bezier(0.77, 0, 0.175, 1)" }
+    );
+  }
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
+
 function renderSnapshot(rawSnapshot) {
   const snapshot = withCatalog(rawSnapshot);
   lastSnapshot = snapshot;
   const services = snapshot?.services || [];
   const excluded = [...(snapshot?.hidden || []), ...(snapshot?.unresolved || [])];
 
-  rows.innerHTML = services
-    .map(
-      (s, i) =>
-        `<tr class="${s.likelyClosed ? "row-closed" : ""}">
-          <td>${i + 1}</td>
-          <td class="cell-service">${serviceCell(s)}</td>
-          <td class="cell-domain">${escapeHtml(s.registrableDomain || "")}</td>
-          <td>${bandCell(s)}</td>
-          <td>${evidenceBadges(s.families)}</td>
-          <td class="cell-month">${escapeHtml(s.lastSeenMonth || "—")}</td>
-          <td class="col-count">${s.messageCount}</td>
-          <td>${deletionCell(s, i)}</td>
-        </tr>`
-    )
-    .join("");
+  reconcileRows(services);
 
   const hasInferred = services.some((s) => s.linkSafety === "inferred");
   linkNote.classList.toggle("hidden", !hasInferred);
@@ -341,7 +380,16 @@ function requestGmailToken() {
         reject(new Error(e?.message || "Gmail 권한 요청 실패"));
       },
     });
-    tokenClient.requestAccessToken({ prompt: "consent" });
+    // Empty string, not "consent". Per Google's own reference, "consent" forces the consent
+    // screen on every single call, while an unspecified prompt means "the user is prompted only
+    // on the first access request". The token lives in a variable and dies on reload, so with
+    // "consent" every refresh made the user re-grant Gmail from scratch.
+    //
+    // This does not weaken the §5 boundary. The grant is still incremental and still separate
+    // from the product sign-in, the token still never touches a cookie or our server, and the
+    // user can still revoke at myaccount.google.com/permissions, which the trust block links.
+    // What changes is only that we stop re-asking a question they already answered.
+    tokenClient.requestAccessToken({ prompt: "" });
   });
 }
 
@@ -423,10 +471,6 @@ scanBtn?.addEventListener("click", async () => {
     const finalSnap = aggregator.snapshot();
     renderSnapshot(finalSnap);
 
-    const unknownShare =
-      finalSnap.stats.messages > 0
-        ? ((finalSnap.stats.unknownFamily / finalSnap.stats.messages) * 100).toFixed(1)
-        : "0.0";
     const bands = { high: 0, review: 0, low: 0 };
     for (const s of finalSnap.services) {
       bands[s.discoveryBand] = (bands[s.discoveryBand] || 0) + 1;
@@ -436,19 +480,40 @@ scanBtn?.addEventListener("click", async () => {
     progressEl.textContent = `완료: ${result.fetched} / ${result.scannedIds}${result.unlimited ? " (전체)" : ""}`;
     // The last tick lands a hair short of the total; a bar that stops at 99% reads as a stall.
     setProgressBar(1);
+
+    // What the user is owed: whose mailbox, how much of it, what came out. This line used to
+    // carry eleven fields including "unauthenticated 91/811" and "unknownFamily 189/811 (23.3%)",
+    // which are our diagnostics wearing English identifiers in a Korean product.
     meta.textContent = [
-      `Gmail: ${result.account}`,
-      `스캔 ID: ${result.scannedIds}`,
-      `헤더 조회: ${result.fetched}`,
-      `에러: ${result.errors}`,
-      `후보 ${finalSnap.stats.services}`,
-      `높음 ${bands.high} · 검토 ${bands.review} · 낮음 ${bands.low}`,
-      `폐쇄추정 ${closedN}`,
-      `제외 ${finalSnap.stats.hidden}`,
-      `미해결 ${finalSnap.stats.unresolved}`,
-      `unauthenticated ${finalSnap.stats.unauthenticatedMessages}/${finalSnap.stats.messages}`,
-      `unknownFamily ${finalSnap.stats.unknownFamily}/${finalSnap.stats.messages} (${unknownShare}%)`,
-    ].join(" · ");
+      result.account,
+      `메일 ${result.fetched}통 검사`,
+      `후보 ${finalSnap.stats.services}개 (높음 ${bands.high} · 검토 ${bands.review} · 낮음 ${bands.low})`,
+      closedN ? `폐쇄 추정 ${closedN}` : null,
+      `제외 ${finalSnap.stats.hidden + finalSnap.stats.unresolved}`,
+      result.errors ? `읽지 못한 메일 ${result.errors}통` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    // The diagnostics still exist, in the console, where they are for us. Every scoring decision
+    // made today was argued from these two numbers, so they do not get to disappear.
+    console.info("[dfm] scan", {
+      account: result.account,
+      listed: result.scannedIds,
+      fetched: result.fetched,
+      errors: result.errors,
+      candidates: finalSnap.stats.services,
+      bands,
+      likelyClosed: closedN,
+      hidden: finalSnap.stats.hidden,
+      unresolved: finalSnap.stats.unresolved,
+      unauthenticated: `${finalSnap.stats.unauthenticatedMessages}/${finalSnap.stats.messages}`,
+      unknownFamily: `${finalSnap.stats.unknownFamily}/${finalSnap.stats.messages}`,
+      unknownShare:
+        finalSnap.stats.messages > 0
+          ? `${((finalSnap.stats.unknownFamily / finalSnap.stats.messages) * 100).toFixed(1)}%`
+          : "0.0%",
+    });
   } catch (e) {
     err.textContent = String(e.message || e);
   } finally {

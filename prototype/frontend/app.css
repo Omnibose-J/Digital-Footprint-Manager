@@ -496,20 +496,56 @@ table {
   border-spacing: 0;
 }
 
+/* Widths decided once, in CSS, not re-derived from content on every render. The service name is
+   the only column that flexes; everything else holds still while rows stream in. */
+.table-services {
+  table-layout: fixed;
+  min-width: 860px;
+}
+
+.w-rank {
+  width: 44px;
+}
+.w-domain {
+  width: 170px;
+}
+.w-band {
+  width: 230px;
+}
+.w-month {
+  width: 96px;
+}
+.w-count {
+  width: 68px;
+}
+.w-action {
+  width: 116px;
+}
+
+.table-services td {
+  overflow-wrap: anywhere;
+}
+
 th,
 td {
   text-align: left;
   padding: var(--s3) var(--s3);
-  border-bottom: 1px solid var(--rule);
   vertical-align: middle;
 }
 
+td {
+  border-bottom: 1px solid var(--rule);
+}
+
+/* No uppercase and no tracking. Hangul has no case, so text-transform does nothing to 서비스 and
+   0.04em only pries the syllables apart; both are Latin conventions borrowed onto a Korean table.
+   The header earns its rank from weight and colour instead, and from the rule under it. */
 th {
-  color: var(--ink-deep);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink-quiet);
   font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -519,6 +555,10 @@ tbody tr {
 
 tbody tr:hover {
   background: var(--surface);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
 }
 
 td:first-child,
@@ -570,11 +610,12 @@ th:first-child {
   align-items: center;
   gap: var(--s1);
   border-radius: var(--radius-pill);
-  padding: 5px var(--s3);
+  padding: 4px var(--s3);
   font-size: var(--text-xs);
   font-weight: 700;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
 }
 
 .band-high {
@@ -603,33 +644,28 @@ tr.row-closed td {
   color: var(--ink-faint);
 }
 
+/* The band answers "how sure", this answers "from what". It sits under, quiet, and wraps freely:
+   it is the only prose in the row and it should read like prose, not like another chip. */
 .score-why {
   display: block;
+  margin-top: var(--s1);
   color: var(--ink-faint);
   font-size: var(--text-xs);
-  margin-top: 2px;
+  line-height: 1.45;
 }
 
-/* ---------- evidence badges ----------
-   Their .tag chip. */
-
-.badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1);
+/* The name leads; the domain is a machine detail that identifies it. Stacking them lets the
+   service column carry both without a second column competing for the eye. */
+.cell-service {
+  font-weight: 600;
+  color: var(--ink-deep);
+  line-height: 1.4;
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--hairline-faint);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  padding: 4px var(--s3);
-  font-size: var(--text-xs);
-  color: var(--ink-quiet);
-  white-space: nowrap;
-}
+/* The 증거 column and its chips are gone. It restated 신뢰: the band cell already says
+   "75점 · 가입 완료 + 비밀번호 재설정", and the chips next to it said 가입 · 인증. The only thing
+   they added was 미분류 and 마케팅, neither of which scores or tells the user anything to do.
+   Four or five pills per row across sixty rows was also most of why the list read as generated. */
 
 /* ---------- excluded bucket ---------- */
 

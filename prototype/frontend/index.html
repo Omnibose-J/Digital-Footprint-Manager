@@ -75,16 +75,27 @@
         </p>
 
         <div class="table-wrap">
-          <table>
+          <!-- Fixed widths, declared once. With table-layout:auto the browser re-measures every
+               column against every row on each render, and during a scan that is the list
+               twitching. -->
+          <table class="table-services">
             <caption class="hidden">발견된 계정 후보</caption>
+            <colgroup>
+              <col class="w-rank" />
+              <col />
+              <col class="w-domain" />
+              <col class="w-band" />
+              <col class="w-month" />
+              <col class="w-count" />
+              <col class="w-action" />
+            </colgroup>
             <thead>
               <tr>
                 <th scope="col">#</th>
                 <th scope="col">서비스</th>
                 <th scope="col">도메인</th>
                 <th scope="col">신뢰</th>
-                <th scope="col">증거</th>
-                <th scope="col">최근 증거</th>
+                <th scope="col">마지막 흔적</th>
                 <th scope="col" class="col-count">건수</th>
                 <th scope="col">탈퇴</th>
               </tr>

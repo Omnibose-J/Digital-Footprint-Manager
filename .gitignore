@@ -9,3 +9,7 @@ token.json
 .token.json
 ~$*
 *.local
+
+# Playwright
+prototype/test-results/
+prototype/playwright-report/
