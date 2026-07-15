@@ -105,10 +105,10 @@ export function splitAuthservBlocks(raw) {
     if (i + 1 < hits.length) {
       const nextId = hits[i + 1].id;
       const searchFrom = hits[i].bodyStart;
+      // Folding above already collapsed /\n[ \t]+/ into a single space, so a newline is never
+      // followed by whitespace here — only the bare "\n<id>" form can ever match.
       const idx = text.toLowerCase().indexOf(`\n${nextId}`, searchFrom);
-      const idx2 = text.toLowerCase().indexOf(`\n ${nextId}`, searchFrom);
-      const candidates = [idx, idx2].filter((n) => n >= 0);
-      if (candidates.length) sliceEnd = Math.min(...candidates);
+      if (idx >= 0) sliceEnd = idx;
     }
     blocks.push({
       authservId: hits[i].id,

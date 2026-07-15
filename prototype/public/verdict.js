@@ -8,14 +8,14 @@
  */
 
 /** Score desc, then messageCount desc — single shared comparator (SOW 005 R9). */
-export function compareByScoreThenCount(a, b) {
+function compareByScoreThenCount(a, b) {
   const sa = a.discoveryScore || 0;
   const sb = b.discoveryScore || 0;
   if (sb !== sa) return sb - sa;
   return b.messageCount - a.messageCount;
 }
 
-export function compareByCount(a, b) {
+function compareByCount(a, b) {
   return b.messageCount - a.messageCount;
 }
 

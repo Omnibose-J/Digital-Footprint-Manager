@@ -1,4 +1,4 @@
-﻿> **Runnable app:** `prototype/` — start with `prototype/run.cmd` or `node prototype/run.mjs`.
+> **Runnable app:** `prototype/` — start with `prototype/run.cmd` or `node prototype/run.mjs`.
 # Digital Footprint Manager
 
 > **"인터넷에 남긴 나의 흔적을 찾아 정리하는 디지털 청소 서비스"**

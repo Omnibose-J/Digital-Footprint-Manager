@@ -3,6 +3,9 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { OAuth2Client } from "google-auth-library";
+// One DNS rule, one place. filter.js is plain ESM with no browser API, and a second copy
+// here would drift from the one the scan actually validates against.
+import { isValidDnsHost } from "../public/filter.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, "..", "public");
@@ -121,24 +124,6 @@ async function requireSession(req, res) {
     return null;
   }
   return session;
-}
-
-/** Same DNS label rules as filter.js (SOW 005 R5). */
-function isValidDnsLabel(label) {
-  const s = String(label || "");
-  if (!s || s.length > 63) return false;
-  if (s.startsWith("-") || s.endsWith("-")) return false;
-  return /^[a-z0-9-]+$/.test(s);
-}
-
-function isValidDnsHost(host) {
-  const labels = String(host || "")
-    .toLowerCase()
-    .replace(/\.$/, "")
-    .split(".")
-    .filter(Boolean);
-  if (labels.length < 2) return false;
-  return labels.every(isValidDnsLabel);
 }
 
 app.get("/api/config", (_req, res) => {

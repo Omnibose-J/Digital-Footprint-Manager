@@ -422,32 +422,20 @@ scanBtn?.addEventListener("click", async () => {
     gmailAccessToken = await requestGmailToken();
     progressEl.textContent = "스캔 시작…";
 
-    // selfEmail comes from the Gmail profile (p.account), not /api/me (SOW 005 R7).
+    // selfEmail comes from the Gmail profile, not /api/me (SOW 005 R7): an expired session
+    // answers {loggedIn:false} with a 200, and an empty selfEmail turns the self rule into a
+    // no-op, which makes the user's own address a candidate service.
     let aggregator = null;
 
     const result = await collectSenders(gmailAccessToken, {
       maxMessages: config.maxMessages,
       concurrency: config.concurrency,
       signal: abortScan.signal,
-      onMessage: (message) => {
-        if (!aggregator) {
-          throw new Error("스캔 프로필이 준비되기 전에 메시지가 도착했습니다.");
-        }
-        aggregator.add(message);
+      onProfile: ({ account }) => {
+        aggregator = createAggregator({ selfEmail: account || "" });
       },
+      onMessage: (message) => aggregator.add(message),
       onProgress: (p) => {
-        if (!aggregator && p.account) {
-          aggregator = createAggregator({ selfEmail: p.account });
-        }
-        if (!aggregator) {
-          progressEl.textContent = formatProgress(p, {
-            messages: 0,
-            services: 0,
-            hidden: 0,
-            unresolved: 0,
-          });
-          return;
-        }
         const snap = aggregator.snapshot();
         renderSnapshot(snap);
         progressEl.textContent = formatProgress(p, snap.stats);

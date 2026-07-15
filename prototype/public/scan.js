@@ -99,7 +99,7 @@ export function headerMap(headers) {
   return out;
 }
 
-function shouldRetryGmail(err, attempt) {
+export function shouldRetryGmail(err, attempt) {
   if (attempt >= 4) return false;
   if (err?.status === 429) return true;
   if (err?.status === 403 && isRateLimitReason(err.reason)) return true;
@@ -109,12 +109,14 @@ function shouldRetryGmail(err, attempt) {
 /**
  * Full-mailbox (or capped) scan in the browser.
  * Pure collector — aggregation lives in filter.js (wired by app.js).
+ * onProfile({ account, estimatedTotal }) — once, before any message, so the caller can build
+ *   state that every message depends on. Throws here abort the scan rather than being counted.
  * onProgress({ phase, unlimited, target, scannedIds, fetched, errors, account })
  * onMessage({ id, internalDate, labelIds, headers })
  */
 export async function collectSenders(
   accessToken,
-  { maxMessages = 0, concurrency = 12, onProgress, onMessage, signal } = {}
+  { maxMessages = 0, concurrency = 12, onProfile, onProgress, onMessage, signal } = {}
 ) {
   const unlimited = !(Number(maxMessages) > 0);
   const cap = unlimited ? Number.POSITIVE_INFINITY : Number(maxMessages);
@@ -126,6 +128,10 @@ export async function collectSenders(
 
   const profile = await gmailFetch(accessToken, "users/me/profile");
   const estimatedTotal = Number(profile.messagesTotal || 0);
+
+  // Before the message loop, not from a progress tick: self-exclusion needs this address, and a
+  // caller that builds state lazily would have to guard every message against not having it yet.
+  onProfile?.({ account: profile.emailAddress || null, estimatedTotal });
 
   const report = (phase, force = false) => {
     const now = Date.now();
