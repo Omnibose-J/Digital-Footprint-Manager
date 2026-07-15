@@ -85,21 +85,25 @@ export const PAYMENT_GATEWAY_DOMAINS = [
 export const MACHINE_LOCALPART =
   /^(no-?reply|do-?not-?reply|notification|notice|alert|auto|mailer|system|admin|info|support|help|team|hello|contact|service|cs|master)([-_.].*)?$/i;
 
-/** @type {Record<string, string[]>} */
+/**
+ * Signup entries carry the score tier (verification=55 / welcome=40).
+ * Other families remain plain phrase strings.
+ * @type {Record<string, Array<string|{phrase: string, tier: 'verification'|'welcome'}>>}
+ */
 export const SUBJECT_RULES = {
   signup: [
-    "가입이 완료",
-    "회원가입이 완료",
-    "회원가입을 환영",
-    "가입해 주셔서 감사",
-    "이메일 인증이 완료",
-    "인증이 완료",
-    "계정이 생성",
-    "welcome to",
-    "verify your email",
-    "confirm your email",
-    "activate your account",
-    "your account has been created",
+    { phrase: "가입이 완료", tier: "welcome" },
+    { phrase: "회원가입이 완료", tier: "welcome" },
+    { phrase: "회원가입을 환영", tier: "welcome" },
+    { phrase: "가입해 주셔서 감사", tier: "welcome" },
+    { phrase: "이메일 인증이 완료", tier: "verification" },
+    { phrase: "인증이 완료", tier: "verification" },
+    { phrase: "계정이 생성", tier: "welcome" },
+    { phrase: "welcome to", tier: "welcome" },
+    { phrase: "verify your email", tier: "verification" },
+    { phrase: "confirm your email", tier: "verification" },
+    { phrase: "activate your account", tier: "verification" },
+    { phrase: "your account has been created", tier: "welcome" },
   ],
   auth: [
     "비밀번호 재설정",

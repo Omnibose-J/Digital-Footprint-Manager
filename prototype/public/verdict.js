@@ -7,6 +7,27 @@
  * CandidateStatus (PRODUCT_SPEC §3 / SOW 004 R6): owned | not_mine | unsure | (restore) candidate
  */
 
+/** Score desc, then messageCount desc — single shared comparator (SOW 005 R9). */
+export function compareByScoreThenCount(a, b) {
+  const sa = a.discoveryScore || 0;
+  const sb = b.discoveryScore || 0;
+  if (sb !== sa) return sb - sa;
+  return b.messageCount - a.messageCount;
+}
+
+export function compareByCount(a, b) {
+  return b.messageCount - a.messageCount;
+}
+
+function sortBuckets(snapshot) {
+  return {
+    ...snapshot,
+    services: [...(snapshot.services || [])].sort(compareByScoreThenCount),
+    hidden: [...(snapshot.hidden || [])].sort(compareByCount),
+    unresolved: [...(snapshot.unresolved || [])].sort(compareByCount),
+  };
+}
+
 /**
  * @param {any} snapshot aggregator snapshot
  * @param {Map<string, 'owned'|'not_mine'|'unsure'|'candidate'>} verdicts keyed by ServiceCandidate.key
@@ -14,7 +35,7 @@
 export function applyUserVerdict(snapshot, verdicts) {
   if (!snapshot) return snapshot;
   if (!verdicts || verdicts.size === 0) {
-    return annotateDefaults(snapshot);
+    return sortBuckets(annotateDefaults(snapshot));
   }
 
   let services = [...(snapshot.services || [])];
@@ -49,16 +70,7 @@ export function applyUserVerdict(snapshot, verdicts) {
 
   services = services.map((s) => applyStatus(s, verdicts.get(s.key)));
 
-  services.sort((a, b) => {
-    const sa = a.discoveryScore || 0;
-    const sb = b.discoveryScore || 0;
-    if (sb !== sa) return sb - sa;
-    return b.messageCount - a.messageCount;
-  });
-  hidden.sort((a, b) => b.messageCount - a.messageCount);
-  unresolved.sort((a, b) => b.messageCount - a.messageCount);
-
-  return {
+  return sortBuckets({
     services,
     hidden,
     unresolved,
@@ -68,7 +80,7 @@ export function applyUserVerdict(snapshot, verdicts) {
       hidden: hidden.length,
       unresolved: unresolved.length,
     },
-  };
+  });
 }
 
 function annotateDefaults(snapshot) {
@@ -82,7 +94,7 @@ function annotateDefaults(snapshot) {
 }
 
 /**
- * owned: confirmed; score never lowered (G6).
+ * owned: score never lowered (G6).
  * unsure: force band to review regardless of score (R6).
  */
 function applyStatus(service, status) {
@@ -93,7 +105,6 @@ function applyStatus(service, status) {
       // Score number unchanged — override is confirmation, not a rewrite (G6).
       discoveryScore: service.discoveryScore,
       discoveryBand: service.discoveryBand,
-      confirmed: true,
     };
   }
   if (status === "unsure") {
@@ -101,12 +112,10 @@ function applyStatus(service, status) {
       ...service,
       userStatus: "unsure",
       discoveryBand: "review",
-      confirmed: false,
     };
   }
   return {
     ...service,
     userStatus: status || service.userStatus || null,
-    confirmed: false,
   };
 }

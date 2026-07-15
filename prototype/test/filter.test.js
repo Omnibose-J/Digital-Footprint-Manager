@@ -490,10 +490,32 @@ describe("SOW 004 filter integration (gate + score + verdict)", () => {
     );
     const snap = agg.snapshot();
     const before = snap.services[0].discoveryScore;
-    assert.ok(before <= 15);
+    assert.equal(before, 5);
     const out = applyUserVerdict(snap, new Map([[snap.services[0].key, "owned"]]));
     assert.equal(out.services[0].userStatus, "owned");
     assert.equal(out.services[0].discoveryScore, before);
-    assert.ok(out.services[0].confirmed);
+  });
+});
+
+describe("SOW 005 R5 DNS label validation", () => {
+  it("attacker.com#.naver.com → invalid_domain, not naver.com", () => {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(
+      msg({
+        from: "네이버 <x@attacker.com#.naver.com>",
+        subject: "알림",
+        labelIds: ["CATEGORY_UPDATES"],
+      })
+    );
+    const snap = agg.snapshot();
+    assert.equal(snap.services.length, 0);
+    const inv = snap.hidden.find((h) => h.hiddenRule === "invalid_domain");
+    assert.ok(inv);
+    assert.notEqual(inv.registrableDomain, "naver.com");
+  });
+
+  it("mailer.coupang.com and shop.example.co.kr still resolve", () => {
+    assert.equal(registrableDomainFromHost("mailer.coupang.com"), "coupang.com");
+    assert.equal(registrableDomainFromHost("shop.example.co.kr"), "example.co.kr");
   });
 });

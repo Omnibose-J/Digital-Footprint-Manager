@@ -27,7 +27,7 @@ describe("SOW 004 R1 authenticity gate", () => {
       "coupang.com"
     );
     assert.equal(r.pass, false);
-    assert.ok(r.reason === "dmarc_fail" || r.reason === "no_pass");
+    assert.equal(r.reason, "dmarc_fail");
   });
 
   it("never takes the first authserv-id when it is not mx.google.com", () => {

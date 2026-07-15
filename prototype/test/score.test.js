@@ -1,10 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import {
-  computeDiscoveryScore,
-  computeLikelyClosed,
-  signupTierFromPhrase,
-} from "../public/score.js";
+import { computeDiscoveryScore, computeLikelyClosed } from "../public/score.js";
+import { classifyMessage } from "../public/filter.js";
 
 describe("SOW 004 R3 discoveryScore", () => {
   it("verification 55 + reset 35 → 90 high", () => {
@@ -38,21 +35,6 @@ describe("SOW 004 R3 discoveryScore", () => {
       transactionMonths: ["2024-01", "2024-02", "2024-03"],
       notificationMonths: ["2024-01", "2024-02", "2024-03"],
     });
-    // tx: min(30, max(30, 25)) = 30; notification: 15; sum 45 — wait
-    // Spec example: recurring subscription 25 + notifications 15 = 40 review
-    // So the floor-at-25 for ≥3 months replaces 10*3=30? Or they mean the floor case
-    // when using a different counting? Spec table: "10 per distinct month; recurring in ≥3
-    // distinct months floors the family at 25" + cap 30.
-    // Worked example says 25+15=40. So for ≥3 months they want 25 (floor as the score when
-    // treating as "recurring subscription"), not 10*3=30.
-    // Re-read: "floors the family at 25" means minimum 25, not set-to-25.
-    // But worked example explicitly says 25+15=40.
-    // So the worked example uses 25 for the 3-month subscription case.
-    // I'll treat ≥3 months as exactly the recurring floor contribution of 25 unless
-    // 10*n is used only below 3 months... That would mean: 1→10, 2→20, ≥3→25 (then cap 30
-    // for more?). Or ≥3 → max(25, min(30, 10*n)) which is 30 for n=3.
-    //
-    // The worked example is authoritative for the SOW verify table (#4). Expect 40.
     assert.equal(r.discoveryScore, 40);
     assert.equal(r.discoveryBand, "review");
   });
@@ -78,9 +60,15 @@ describe("SOW 004 R3 discoveryScore", () => {
     assert.equal(r.discoveryScore, 55);
   });
 
-  it("signup tiers distinguishable", () => {
-    assert.equal(signupTierFromPhrase("이메일 인증이 완료"), "verification");
-    assert.equal(signupTierFromPhrase("회원가입이 완료"), "welcome");
+  it("signup tiers come from SUBJECT_RULES phrase tags", () => {
+    assert.equal(
+      classifyMessage({ subject: "이메일 인증이 완료되었습니다" }).signupTier,
+      "verification"
+    );
+    assert.equal(
+      classifyMessage({ subject: "회원가입이 완료되었습니다" }).signupTier,
+      "welcome"
+    );
   });
 
   it("notification cap stays 15 (F5)", () => {

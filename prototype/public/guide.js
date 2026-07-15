@@ -1,5 +1,7 @@
 /** Deletion guide modal: route blocks, checklist, warnings, Korean template. */
 
+import { escapeHtml } from "./html.js";
+
 const CHECKLIST = [
   "진행 중인 구독·정기결제·예약·환불",
   "포인트·쿠폰·잔액·적립금",
@@ -47,14 +49,6 @@ export function renderRequestTemplate({ serviceName, maskedAccount }) {
   const subject = `[회원탈퇴 및 개인정보 삭제 요청] ${name} / ${account}`;
   const body = TEMPLATE_BODY;
   return { subject, body, fullText: `제목: ${subject}\n\n${body}` };
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
 function safetyBadge(candidate, entry, stale) {

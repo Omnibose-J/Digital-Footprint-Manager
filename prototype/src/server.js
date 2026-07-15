@@ -17,8 +17,34 @@ const savedCandidates = new Map();
 
 const oauthClient = clientId ? new OAuth2Client(clientId) : null;
 
+/** PRODUCT_SPEC §6 / SOW 005 R2 — GIS sign-in must keep working (H3). */
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'none'",
+  "script-src 'self' https://accounts.google.com/gsi/client",
+  "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
+  // GIS token client talks to accounts.google.com (not only /gsi/) and oauth2.googleapis.com;
+  // Gmail metadata stays on gmail.googleapis.com.
+  "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://gmail.googleapis.com",
+  "frame-src https://accounts.google.com/gsi/ https://accounts.google.com/",
+  "img-src 'self' data: https://*.googleusercontent.com",
+  "frame-ancestors 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+].join("; ");
+
 const app = express();
+app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
+
+app.use((req, res, next) => {
+  res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  if (req.path.startsWith("/api")) {
+    res.setHeader("Cache-Control", "no-store");
+  }
+  next();
+});
 
 function parseCookies(req) {
   const raw = req.headers.cookie || "";
@@ -97,15 +123,23 @@ async function requireSession(req, res) {
   return session;
 }
 
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
-    hasClientId: Boolean(clientId),
-    gmailOnServer: false,
-    maxMessages,
-    concurrency,
-  });
-});
+/** Same DNS label rules as filter.js (SOW 005 R5). */
+function isValidDnsLabel(label) {
+  const s = String(label || "");
+  if (!s || s.length > 63) return false;
+  if (s.startsWith("-") || s.endsWith("-")) return false;
+  return /^[a-z0-9-]+$/.test(s);
+}
+
+function isValidDnsHost(host) {
+  const labels = String(host || "")
+    .toLowerCase()
+    .replace(/\.$/, "")
+    .split(".")
+    .filter(Boolean);
+  if (labels.length < 2) return false;
+  return labels.every(isValidDnsLabel);
+}
 
 app.get("/api/config", (_req, res) => {
   if (!clientId) {
@@ -164,9 +198,10 @@ app.post("/api/auth/login", async (req, res) => {
       email: payload.email,
       name: payload.name || payload.email,
     });
-  } catch (err) {
-    console.error(err);
-    res.status(401).json({ error: err.message || "Login failed" });
+  } catch {
+    // Never interpolate the error object — google-auth-library embeds credential material (R3).
+    console.error("login failed");
+    res.status(401).json({ error: "로그인에 실패했습니다." });
   }
 });
 
@@ -191,8 +226,9 @@ app.post("/api/candidates", async (req, res) => {
       .trim()
       .toLowerCase()
       .replace(/^@/, "");
-    if (!domain || !domain.includes(".") || seen.has(domain)) continue;
+    if (!domain || seen.has(domain)) continue;
     if (domain.length > 253) continue;
+    if (!isValidDnsHost(domain)) continue;
     seen.add(domain);
     cleaned.push({
       domain,

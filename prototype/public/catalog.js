@@ -1,5 +1,7 @@
 /** Catalog load, domain match, and verified-link upgrade. Browser ESM; no bundler. */
 
+import { linkFields } from "./filter.js";
+
 const VALID_ROUTES = new Set([
   "self_service",
   "contact_form",
@@ -71,9 +73,8 @@ export function isStale(entry, today = new Date()) {
  * Uses filter.linkFields via the optional-match path (R3).
  * @param {any} candidate
  * @param {{ services?: any[] } | null | undefined} catalog
- * @param {(domain: string|null, hiddenRule: string|null, match?: any|null) => any} linkFields
  */
-export function upgradeCandidate(candidate, catalog, linkFields) {
+export function upgradeCandidate(candidate, catalog) {
   if (!candidate) return candidate;
   if (candidate.linkBlockedBy) return { ...candidate, catalogEntry: null };
 
@@ -91,10 +92,9 @@ export function upgradeCandidate(candidate, catalog, linkFields) {
   };
 }
 
-export function upgradeSnapshot(snapshot, catalog, linkFields) {
+export function upgradeSnapshot(snapshot, catalog) {
   if (!snapshot) return snapshot;
-  const map = (list) =>
-    (list || []).map((c) => upgradeCandidate(c, catalog, linkFields));
+  const map = (list) => (list || []).map((c) => upgradeCandidate(c, catalog));
   return {
     ...snapshot,
     services: map(snapshot.services),

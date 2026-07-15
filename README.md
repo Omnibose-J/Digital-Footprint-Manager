@@ -1,3 +1,4 @@
+﻿> **Runnable app:** `prototype/` — start with `prototype/run.cmd` or `node prototype/run.mjs`.
 # Digital Footprint Manager
 
 > **"인터넷에 남긴 나의 흔적을 찾아 정리하는 디지털 청소 서비스"**
@@ -114,3 +115,4 @@ MVP 기준 완전 자동화는 어렵다.
 - 단순 보안이 아닌 **"디지털 정리"** 목적
 - 발견 → 분석 → 삭제 행동까지 연결
 - 과거에 쌓인 데이터를 관리하는 서비스
+

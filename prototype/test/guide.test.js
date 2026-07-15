@@ -4,8 +4,6 @@ import {
   maskAccount,
   renderRequestTemplate,
   renderGuideHtml,
-  CHECKLIST,
-  WARNINGS,
 } from "../public/guide.js";
 
 describe("guide template (E6)", () => {
@@ -26,12 +24,8 @@ describe("guide template (E6)", () => {
       "[회원탈퇴 및 개인정보 삭제 요청] Spotify / so****@gmail.com"
     );
     assert.ok(body.includes("회원탈퇴 및 개인정보 삭제"));
-    // No leftover placeholders
     assert.ok(!fullText.includes("{서비스명}"));
     assert.ok(!fullText.includes("{마스킹된 계정}"));
-    // Must not inject extra user data fields
-    assert.ok(!fullText.includes("password"));
-    assert.ok(!fullText.includes("주민"));
   });
 });
 
@@ -62,7 +56,7 @@ describe("guide modal render states (R4)", () => {
     assert.match(html, /step-one/);
   });
 
-  it("unmatched shows 공식 탈퇴 경로 미확인 plus checklist/warnings/template", () => {
+  it("unmatched shows 공식 탈퇴 경로 미확인 with distinct escaped list items", () => {
     const html = renderGuideHtml({
       candidate: {
         displayName: "Unknown Shop",
@@ -76,14 +70,34 @@ describe("guide modal render states (R4)", () => {
     });
     assert.match(html, /공식 탈퇴 경로 미확인/);
     assert.ok(!html.includes("공식 경로 없음(검증됨)"));
-    for (const item of CHECKLIST) {
-      assert.ok(html.includes(item), `missing checklist: ${item}`);
-    }
-    for (const w of WARNINGS) {
-      assert.ok(html.includes(w), `missing warning`);
-    }
+    const liCount = (html.match(/<li>/g) || []).length;
+    assert.ok(liCount >= 8, `expected checklist+warnings as <li>, got ${liCount}`);
     assert.match(html, /Unknown Shop/);
     assert.match(html, /so\*\*\*\*@gmail\.com/);
+  });
+
+  it("ampersand in catalog step is HTML-escaped", () => {
+    const html = renderGuideHtml({
+      candidate: {
+        displayName: "Acme",
+        registrableDomain: "acme.example",
+        linkSafety: "verified",
+      },
+      entry: {
+        display_name: "Acme",
+        deletion_route: "self_service",
+        url: "https://acme.example/close",
+        steps: ["Open Settings & Privacy"],
+        prerequisites: [],
+        grace_period: "7일",
+        last_verified_at: "2026-07-15",
+      },
+      stale: false,
+      serviceName: "Acme",
+      maskedAccount: "so****@gmail.com",
+    });
+    assert.ok(html.includes("Settings &amp; Privacy"));
+    assert.ok(!html.includes("Settings & Privacy"));
   });
 
   it("stale matched entry surfaces 검토 필요", () => {

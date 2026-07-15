@@ -2,11 +2,7 @@
 
 import { defaultRules } from "./filter.rules.js";
 import { authVerdict } from "./authenticity.js";
-import {
-  computeDiscoveryScore,
-  computeLikelyClosed,
-  signupTierFromPhrase,
-} from "./score.js";
+import { computeDiscoveryScore, computeLikelyClosed } from "./score.js";
 
 const FAMILIES = [
   "signup",
@@ -59,9 +55,27 @@ function domainFromEmail(email) {
     .toLowerCase();
 }
 
+/** DNS label: /^[a-z0-9-]+$/, no leading/trailing hyphen (SOW 005 R5). */
+export function isValidDnsLabel(label) {
+  const s = String(label || "");
+  if (!s || s.length > 63) return false;
+  if (s.startsWith("-") || s.endsWith("-")) return false;
+  return /^[a-z0-9-]+$/.test(s);
+}
+
+export function isValidDnsHost(host) {
+  const labels = String(host || "")
+    .toLowerCase()
+    .replace(/\.$/, "")
+    .split(".")
+    .filter(Boolean);
+  if (labels.length < 2) return false;
+  return labels.every(isValidDnsLabel);
+}
+
 /**
  * Registrable domain = eTLD+1 against PUBLIC_SUFFIXES (longest match),
- * else last two labels, else null when no dot.
+ * else last two labels, else null when no dot or invalid labels.
  */
 export function registrableDomainFromHost(senderDomain, publicSuffixes = defaultRules.PUBLIC_SUFFIXES) {
   const host = String(senderDomain || "")
@@ -71,6 +85,7 @@ export function registrableDomainFromHost(senderDomain, publicSuffixes = default
 
   const labels = host.split(".").filter(Boolean);
   if (labels.length < 2) return null;
+  if (!labels.every(isValidDnsLabel)) return null;
 
   let bestSuffix = null;
   for (const suffix of publicSuffixes) {
@@ -137,41 +152,47 @@ function normalizeSubject(subject) {
     .trim();
 }
 
+function subjectPhraseEntry(entry) {
+  if (entry && typeof entry === "object") {
+    return {
+      phrase: String(entry.phrase || ""),
+      tier: entry.tier === "verification" ? "verification" : "welcome",
+    };
+  }
+  return { phrase: String(entry || ""), tier: "welcome" };
+}
+
 export function classifyMessage(
   { labelIds = [], subject = "", headers = {} } = {},
   rules = defaultRules
 ) {
-  const matchedRules = [];
   const normalized = normalizeSubject(subject);
   const subjectRules = rules.SUBJECT_RULES || {};
 
   for (const family of ["signup", "auth", "transaction", "closure"]) {
     const phrases = subjectRules[family] || [];
-    for (const phrase of phrases) {
+    for (const entry of phrases) {
+      const { phrase, tier } = subjectPhraseEntry(entry);
       const needle = normalizeSubject(phrase);
       if (needle && normalized.includes(needle)) {
-        matchedRules.push(`subject:${family}:${phrase}`);
-        const signupTier = family === "signup" ? signupTierFromPhrase(phrase) : null;
-        return { family, matchedRules, signupTier };
+        const signupTier = family === "signup" ? tier : null;
+        return { family, signupTier };
       }
     }
   }
 
   const labels = Array.isArray(labelIds) ? labelIds : [];
   if (labels.includes(rules.CATEGORY_PURCHASES)) {
-    matchedRules.push("category:purchases");
-    return { family: "transaction", matchedRules, signupTier: null };
+    return { family: "transaction", signupTier: null };
   }
   if (labels.includes(rules.CATEGORY_PROMOTIONS)) {
-    matchedRules.push("category:promotions");
-    return { family: "marketing", matchedRules, signupTier: null };
+    return { family: "marketing", signupTier: null };
   }
   if (labels.includes(rules.CATEGORY_UPDATES)) {
-    matchedRules.push("category:updates");
-    return { family: "notification", matchedRules, signupTier: null };
+    return { family: "notification", signupTier: null };
   }
 
-  return { family: "unknown", matchedRules, signupTier: null };
+  return { family: "unknown", signupTier: null };
 }
 
 function monthFromInternalDate(internalDate) {
@@ -185,15 +206,6 @@ function monthFromInternalDate(internalDate) {
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
-}
-
-function emptyHeaderFeatures() {
-  return {
-    listUnsubscribe: 0,
-    listId: 0,
-    precedenceBulk: 0,
-    autoSubmitted: 0,
-  };
 }
 
 function emptyFamilies() {
@@ -225,17 +237,6 @@ function lastSeenMonthFromFamilies(families) {
   return latest;
 }
 
-function firstSeenMonthFromFamilies(families) {
-  let earliest = null;
-  for (const f of FAMILIES) {
-    const months = families[f]?.months || [];
-    for (const month of months) {
-      if (!earliest || month < earliest) earliest = month;
-    }
-  }
-  return earliest;
-}
-
 function mostFrequentName(nameCounts) {
   let best = "";
   let bestN = -1;
@@ -248,18 +249,49 @@ function mostFrequentName(nameCounts) {
   return best;
 }
 
-function aggregationKey(normalized, rules, self) {
-  const free = new Set(rules.FREE_MAILBOX_DOMAINS);
-  const relay = new Set(rules.RELAY_DOMAINS);
-  if (!normalized.registrableDomain) return `invalid:${normalized.email}`;
-  // The user's own address is an address-level fact, so it needs its own bucket.
-  // Folded into `dom:`, it would hide every service on that domain — SENT mail puts
-  // the user in From, so a custom/Workspace domain loses all of its services.
-  if (self && normalized.email === self) return `addr:${normalized.email}`;
-  if (free.has(normalized.registrableDomain) || relay.has(normalized.registrableDomain)) {
-    return `addr:${normalized.email}`;
+/**
+ * Link fields for a candidate. Uses no aggregator instance state (SOW 005 R9).
+ * @param {string|null} registrableDomain
+ * @param {string|null} hiddenRule
+ * @param {any|null} match catalog entry
+ * @param {typeof defaultRules} [rules]
+ */
+export function linkFields(
+  registrableDomain,
+  hiddenRule,
+  match = null,
+  rules = defaultRules
+) {
+  if (match) {
+    return {
+      siteUrl: match.url || null,
+      linkSafety: "verified",
+      linkBlockedBy: null,
+    };
   }
-  return `dom:${normalized.registrableDomain}`;
+
+  const freeSet = new Set(rules.FREE_MAILBOX_DOMAINS);
+  const relaySet = new Set(rules.RELAY_DOMAINS);
+
+  let linkBlockedBy = null;
+  if (hiddenRule === "self") linkBlockedBy = "self";
+  else if (hiddenRule === "relay_domain" || (registrableDomain && relaySet.has(registrableDomain))) {
+    linkBlockedBy = "relay";
+  } else if (registrableDomain && freeSet.has(registrableDomain)) {
+    linkBlockedBy = "free_mailbox";
+  }
+
+  if (linkBlockedBy) {
+    return { siteUrl: null, linkSafety: "none", linkBlockedBy };
+  }
+  if (!registrableDomain) {
+    return { siteUrl: null, linkSafety: "none", linkBlockedBy: null };
+  }
+  return {
+    siteUrl: `https://${registrableDomain}`,
+    linkSafety: "inferred",
+    linkBlockedBy: null,
+  };
 }
 
 /**
@@ -271,6 +303,18 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
   const relaySet = new Set(rules.RELAY_DOMAINS);
   const paymentGatewaySet = new Set(rules.PAYMENT_GATEWAY_DOMAINS || []);
   const machineRe = rules.MACHINE_LOCALPART;
+
+  function aggregationKey(normalized) {
+    if (!normalized.registrableDomain) return `invalid:${normalized.email}`;
+    // The user's own address is an address-level fact, so it needs its own bucket.
+    // Folded into `dom:`, it would hide every service on that domain — SENT mail puts
+    // the user in From, so a custom/Workspace domain loses all of its services.
+    if (self && normalized.email === self) return `addr:${normalized.email}`;
+    if (freeSet.has(normalized.registrableDomain) || relaySet.has(normalized.registrableDomain)) {
+      return `addr:${normalized.email}`;
+    }
+    return `dom:${normalized.registrableDomain}`;
+  }
 
   /** @type {Map<string, any>} */
   const byKey = new Map();
@@ -287,10 +331,8 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
         emails: new Set(),
         localParts: new Set(),
         nameCounts: new Map(),
-        senderAddresses: 0,
         messageCount: 0,
         families: emptyFamilies(),
-        headerFeatures: emptyHeaderFeatures(),
         scoreBuckets: emptyScoreBuckets(),
       };
       byKey.set(key, svc);
@@ -313,15 +355,12 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
     );
     if (family === "unknown") unknownFamily += 1;
 
-    const key = aggregationKey(normalized, rules, self);
+    const key = aggregationKey(normalized);
     const svc = ensureService(key, normalized);
 
     if (normalized.email && !svc.emails.has(normalized.email)) {
       svc.emails.add(normalized.email);
       svc.localParts.add(normalized.localPart);
-      svc.senderAddresses += 1;
-    } else if (!normalized.email && svc.senderAddresses === 0) {
-      svc.senderAddresses = 1;
     }
 
     const displayName = normalized.displayName || normalized.email;
@@ -358,47 +397,6 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
         sb.hasMarketing = true;
       }
     }
-
-    if (headers.listUnsubscribe) svc.headerFeatures.listUnsubscribe += 1;
-    if (headers.listId) svc.headerFeatures.listId += 1;
-    if (String(headers.precedence || "").toLowerCase().trim() === "bulk") {
-      svc.headerFeatures.precedenceBulk += 1;
-    }
-    if (headers.autoSubmitted) svc.headerFeatures.autoSubmitted += 1;
-  }
-
-  /**
-   * Optional catalog match upgrades the link to verified (SOW 002 R3).
-   * Matching itself stays outside the aggregator.
-   */
-  function linkFields(registrableDomain, hiddenRule, match = null) {
-    if (match) {
-      return {
-        siteUrl: match.url || null,
-        linkSafety: "verified",
-        linkBlockedBy: null,
-      };
-    }
-
-    let linkBlockedBy = null;
-    if (hiddenRule === "self") linkBlockedBy = "self";
-    else if (hiddenRule === "relay_domain" || (registrableDomain && relaySet.has(registrableDomain))) {
-      linkBlockedBy = "relay";
-    } else if (registrableDomain && freeSet.has(registrableDomain)) {
-      linkBlockedBy = "free_mailbox";
-    }
-
-    if (linkBlockedBy) {
-      return { siteUrl: null, linkSafety: "none", linkBlockedBy };
-    }
-    if (!registrableDomain) {
-      return { siteUrl: null, linkSafety: "none", linkBlockedBy: null };
-    }
-    return {
-      siteUrl: `https://${registrableDomain}`,
-      linkSafety: "inferred",
-      linkBlockedBy: null,
-    };
   }
 
   function verdictFor(svc) {
@@ -454,17 +452,14 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
       hasMarketing: sb.hasMarketing,
     });
     const likelyClosed = computeLikelyClosed(families);
-    const links = linkFields(svc.registrableDomain, hiddenRule);
+    const links = linkFields(svc.registrableDomain, hiddenRule, null, rules);
     return {
       key: svc.key, // stable identity across snapshots; registrableDomain is not unique
       registrableDomain: svc.registrableDomain,
       displayName: mostFrequentName(svc.nameCounts) || svc.registrableDomain || "",
-      senderAddresses: svc.senderAddresses,
       messageCount: svc.messageCount,
       families,
-      firstSeenMonth: firstSeenMonthFromFamilies(families),
       lastSeenMonth: lastSeenMonthFromFamilies(families),
-      headerFeatures: { ...svc.headerFeatures },
       siteUrl: links.siteUrl,
       linkSafety: links.linkSafety,
       linkBlockedBy: links.linkBlockedBy,
@@ -472,9 +467,7 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
       hiddenRule,
       discoveryScore: scored.discoveryScore,
       discoveryBand: scored.discoveryBand,
-      familyScores: scored.familyScores,
       scoreExplanation: scored.scoreExplanation,
-      topContributors: scored.topContributors,
       likelyClosed,
       userStatus: null,
     };
@@ -492,15 +485,7 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
       else hidden.push(candidate);
     }
 
-    services.sort((a, b) => {
-      const sa = a.discoveryScore || 0;
-      const sb = b.discoveryScore || 0;
-      if (sb !== sa) return sb - sa;
-      return b.messageCount - a.messageCount;
-    });
-    hidden.sort((a, b) => b.messageCount - a.messageCount);
-    unresolved.sort((a, b) => b.messageCount - a.messageCount);
-
+    // Sort once in verdict.js (last hand on the list) — SOW 005 R9.
     return {
       services,
       hidden,
@@ -516,7 +501,7 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
     };
   }
 
-  return { add, snapshot, linkFields };
+  return { add, snapshot };
 }
 
-export { parseFromHeader, domainFromEmail };
+export { parseFromHeader };

@@ -45,7 +45,7 @@ describe("catalog matchService", () => {
   });
 
   it("free_mailbox candidate is never catalog-matched (E2)", () => {
-    const { add, snapshot, linkFields } = createAggregator({
+    const { add, snapshot } = createAggregator({
       selfEmail: "me@gmail.com",
     });
     add(
@@ -59,14 +59,14 @@ describe("catalog matchService", () => {
     );
     assert.ok(candidate, "rescued naver.com candidate expected");
     assert.equal(candidate.linkBlockedBy, "free_mailbox");
-    const upgraded = upgradeCandidate(candidate, catalog, linkFields);
+    const upgraded = upgradeCandidate(candidate, catalog);
     assert.equal(upgraded.linkSafety, "none");
     assert.equal(upgraded.catalogEntry, null);
     assert.notEqual(upgraded.serviceId, "naver");
   });
 
   it("relay candidate is never catalog-matched (E2)", () => {
-    const { add, snapshot, linkFields } = createAggregator({
+    const { add, snapshot } = createAggregator({
       selfEmail: "me@gmail.com",
     });
     add(msg({ from: "ESP <noreply@sendgrid.net>", subject: "hello" }));
@@ -75,13 +75,13 @@ describe("catalog matchService", () => {
       snapshot().services.find((s) => s.registrableDomain === "sendgrid.net");
     assert.ok(candidate);
     assert.equal(candidate.linkBlockedBy, "relay");
-    const upgraded = upgradeCandidate(candidate, catalog, linkFields);
+    const upgraded = upgradeCandidate(candidate, catalog);
     assert.equal(upgraded.linkSafety, "none");
     assert.equal(upgraded.catalogEntry, null);
   });
 
   it("matched candidate → linkSafety verified and siteUrl = entry.url", () => {
-    const { add, snapshot, linkFields } = createAggregator({
+    const { add, snapshot } = createAggregator({
       selfEmail: "me@gmail.com",
     });
     add(
@@ -96,14 +96,14 @@ describe("catalog matchService", () => {
     assert.ok(candidate);
     assert.equal(candidate.linkSafety, "inferred");
     const entry = matchService("spotify.com", catalog);
-    const upgraded = upgradeCandidate(candidate, catalog, linkFields);
+    const upgraded = upgradeCandidate(candidate, catalog);
     assert.equal(upgraded.linkSafety, "verified");
     assert.equal(upgraded.siteUrl, entry.url);
     assert.equal(upgraded.serviceId, "spotify");
   });
 
   it("unmatched candidate keeps inferred", () => {
-    const { add, snapshot, linkFields } = createAggregator({
+    const { add, snapshot } = createAggregator({
       selfEmail: "me@gmail.com",
     });
     add(
@@ -116,7 +116,7 @@ describe("catalog matchService", () => {
       (s) => s.registrableDomain === "unknown-shop.co.kr"
     );
     assert.ok(candidate);
-    const upgraded = upgradeCandidate(candidate, catalog, linkFields);
+    const upgraded = upgradeCandidate(candidate, catalog);
     assert.equal(upgraded.linkSafety, "inferred");
     assert.equal(upgraded.siteUrl, "https://unknown-shop.co.kr");
     assert.equal(upgraded.catalogEntry, null);

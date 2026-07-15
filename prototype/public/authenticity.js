@@ -101,10 +101,6 @@ export function splitAuthservBlocks(raw) {
   }
 
   for (let i = 0; i < hits.length; i++) {
-    const end = i + 1 < hits.length ? text.lastIndexOf("\n", hits[i + 1].bodyStart) : text.length;
-    // Body runs until the next authserv line start (hit position of next match).
-    const bodyEnd = i + 1 < hits.length ? hits[i + 1].bodyStart - hits[i + 1].id.length - 1 : text.length;
-    // Safer: find start of next hit's full match
     let sliceEnd = text.length;
     if (i + 1 < hits.length) {
       const nextId = hits[i + 1].id;

@@ -3,6 +3,7 @@ import { createAggregator } from "./filter.js";
 import { loadCatalog, upgradeSnapshot, isStale } from "./catalog.js";
 import { renderGuideHtml, renderRequestTemplate, maskAccount } from "./guide.js";
 import { applyUserVerdict } from "./verdict.js";
+import { escapeHtml } from "./html.js";
 
 function el(id) {
   return document.getElementById(id);
@@ -68,19 +69,9 @@ let gmailAccessToken = null;
 let hiddenOpen = false;
 /** @type {any | null} */
 let catalog = null;
-/** @type {((domain: string|null, hiddenRule: string|null, match?: any|null) => any) | null} */
-let linkFieldsFn = null;
 /** @type {HTMLElement | null} */
 let guideTrigger = null;
 let sessionEmail = "";
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
 
 function evidenceBadges(families) {
   const order = ["signup", "auth", "transaction", "notification", "closure", "marketing", "unknown"];
@@ -136,8 +127,8 @@ function confirmCell(index) {
 
 function withCatalog(rawSnapshot) {
   const overridden = applyUserVerdict(rawSnapshot, userVerdict);
-  if (!catalog || !linkFieldsFn) return overridden;
-  return upgradeSnapshot(overridden, catalog, linkFieldsFn);
+  if (!catalog) return overridden;
+  return upgradeSnapshot(overridden, catalog);
 }
 
 function renderSnapshot(rawSnapshot) {
@@ -431,28 +422,31 @@ scanBtn?.addEventListener("click", async () => {
     gmailAccessToken = await requestGmailToken();
     progressEl.textContent = "스캔 시작…";
 
-    // Prefer Gmail profile email for self-exclusion; fall back to app session.
+    // selfEmail comes from the Gmail profile (p.account), not /api/me (SOW 005 R7).
     let aggregator = null;
-    const meData = await fetch("/api/me").then((r) => r.json());
-    aggregator = createAggregator({ selfEmail: meData.email || "" });
-    linkFieldsFn = aggregator.linkFields;
 
     const result = await collectSenders(gmailAccessToken, {
       maxMessages: config.maxMessages,
       concurrency: config.concurrency,
       signal: abortScan.signal,
       onMessage: (message) => {
+        if (!aggregator) {
+          throw new Error("스캔 프로필이 준비되기 전에 메시지가 도착했습니다.");
+        }
         aggregator.add(message);
       },
       onProgress: (p) => {
-        if (
-          p.account &&
-          meData.email &&
-          p.account.toLowerCase() !== String(meData.email).toLowerCase() &&
-          aggregator.snapshot().stats.messages === 0
-        ) {
+        if (!aggregator && p.account) {
           aggregator = createAggregator({ selfEmail: p.account });
-          linkFieldsFn = aggregator.linkFields;
+        }
+        if (!aggregator) {
+          progressEl.textContent = formatProgress(p, {
+            messages: 0,
+            services: 0,
+            hidden: 0,
+            unresolved: 0,
+          });
+          return;
         }
         const snap = aggregator.snapshot();
         renderSnapshot(snap);
@@ -545,9 +539,6 @@ async function boot() {
     console.warn("catalog load failed", e);
     catalog = { version: "missing", services: [] };
   }
-
-  // linkFields needs an aggregator instance; create a throwaway for boot-time upgrades.
-  linkFieldsFn = createAggregator({ selfEmail: "" }).linkFields;
 
   await waitForGis();
   renderGoogleButton();

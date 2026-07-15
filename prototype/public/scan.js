@@ -22,7 +22,20 @@ async function mapPool(items, concurrency, worker) {
   return results;
 }
 
-async function gmailFetch(accessToken, path, params) {
+export function isRateLimitReason(reason) {
+  return reason === "rateLimitExceeded" || reason === "userRateLimitExceeded";
+}
+
+function parseGmailErrorReason(text) {
+  try {
+    const j = JSON.parse(text);
+    return j?.error?.errors?.[0]?.reason || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function gmailFetch(accessToken, path, params) {
   const url = new URL(`https://gmail.googleapis.com/gmail/v1/${path}`);
   if (params) {
     for (const [k, v] of Object.entries(params)) {
@@ -38,19 +51,21 @@ async function gmailFetch(accessToken, path, params) {
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (res.status === 429 || res.status === 403) {
-    const err = new Error(`Gmail rate/auth error ${res.status}`);
-    err.status = res.status;
-    throw err;
-  }
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Gmail ${res.status}: ${text.slice(0, 200)}`);
+    const err = new Error(`Gmail ${res.status}: ${text.slice(0, 200)}`);
+    err.status = res.status;
+    err.reason = parseGmailErrorReason(text);
+    throw err;
   }
   return res.json();
 }
 
-function headerMap(headers) {
+/**
+ * Map Gmail payload headers. Authentication-Results is collected as an array
+ * so authenticity.js can select mx.google.com (SOW 004 R1 / SOW 005 R4).
+ */
+export function headerMap(headers) {
   const out = {
     from: undefined,
     subject: undefined,
@@ -73,9 +88,22 @@ function headerMap(headers) {
   };
   for (const h of headers || []) {
     const key = byName[String(h.name || "").toLowerCase()];
-    if (key && out[key] === undefined) out[key] = h.value;
+    if (!key) continue;
+    if (key === "authenticationResults") {
+      if (!Array.isArray(out.authenticationResults)) out.authenticationResults = [];
+      if (h.value != null && h.value !== "") out.authenticationResults.push(h.value);
+      continue;
+    }
+    if (out[key] === undefined) out[key] = h.value;
   }
   return out;
+}
+
+function shouldRetryGmail(err, attempt) {
+  if (attempt >= 4) return false;
+  if (err?.status === 429) return true;
+  if (err?.status === 403 && isRateLimitReason(err.reason)) return true;
+  return false;
 }
 
 /**
@@ -168,8 +196,13 @@ export async function collectSenders(
           report("fetching");
           return;
         } catch (err) {
+          if (err?.status === 401) {
+            throw new Error(
+              "Gmail 인증이 만료되었습니다. 다시 로그인한 뒤 스캔해 주세요."
+            );
+          }
           attempt += 1;
-          if ((err.status === 429 || err.status === 403) && attempt < 4) {
+          if (shouldRetryGmail(err, attempt)) {
             await sleep(300 * attempt);
             continue;
           }
