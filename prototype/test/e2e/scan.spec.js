@@ -233,6 +233,83 @@ test.describe("the scan a user actually sees", () => {
     expect(copied).toEqual([{ name: "template_copied", params: { route: "self_service" } }]);
   });
 
+  test("the list's own outbound link is counted, split by whether we guessed the address", async ({
+    page,
+  }) => {
+    // The service name in the table is a link, and it was the one outbound path with no counter.
+    // It points at two different things: the catalog's withdrawal URL for a catalogued row, and
+    // https://{sender domain} for a guess. They render identically, so one number would conflate
+    // "went to close their account" with "went to see whether our guess was even right".
+    await runScan(page);
+    const clicks = () =>
+      page.evaluate(() =>
+        (window.dataLayer || [])
+          .map((a) => Array.from(a))
+          .filter((a) => a[0] === "event" && a[1] === "outbound_click")
+          .map((a) => a[2])
+      );
+
+    const [p1] = await Promise.all([
+      page.waitForEvent("popup"),
+      page.locator("#rows tr", { hasText: "spotify.com" }).locator("a[data-out]").click(),
+    ]);
+    await p1.close();
+    expect(await clicks()).toEqual([{ link: "list", safety: "verified" }]);
+
+    // Vercel has no catalog entry, so its address is inferred from the sender domain.
+    const [p2] = await Promise.all([
+      page.waitForEvent("popup"),
+      page.locator("#rows tr", { hasText: "vercel.com" }).locator("a[data-out]").click(),
+    ]);
+    await p2.close();
+    expect(await clicks()).toEqual([
+      { link: "list", safety: "verified" },
+      { link: "list", safety: "inferred" },
+    ]);
+  });
+
+  test("the scan, the restore and the excluded bucket all report themselves", async ({ page }) => {
+    const events = () =>
+      page.evaluate(() =>
+        (window.dataLayer || [])
+          .map((a) => Array.from(a))
+          .filter((a) => a[0] === "event")
+          .map((a) => ({ name: a[1], params: a[2] }))
+      );
+
+    await runScan(page);
+    // scan_completed could never see anyone who bounced off the Google permission screen, which is
+    // where this product asks for the most and is likeliest to lose someone.
+    expect((await events()).filter((e) => e.name === "scan_started")).toEqual([
+      { name: "scan_started", params: {} },
+    ]);
+
+    await page.click("#hiddenToggle");
+    const opened = (await events()).filter((e) => e.name === "excluded_opened");
+    expect(opened).toHaveLength(1);
+    expect(opened[0].params.excluded).toBeGreaterThan(0);
+
+    // Closing it again reports nothing: the question is whether anyone looks, not for how long.
+    await page.click("#hiddenToggle");
+    expect((await events()).filter((e) => e.name === "excluded_opened")).toHaveLength(1);
+
+    // 김철수 was excluded as personal_mailbox. Restoring him is the user telling us that rule was
+    // wrong about him, and the rule's name is the only part of that we are allowed to carry back.
+    await page.click("#hiddenToggle");
+    await page
+      .locator("#hiddenRows tr", { hasText: "김철수" })
+      .getByRole("button", { name: "복구" })
+      .click();
+    expect((await events()).filter((e) => e.name === "sender_restored")).toEqual([
+      { name: "sender_restored", params: { reason: "personal_mailbox" } },
+    ]);
+
+    await page.click("#logout");
+    expect((await events()).filter((e) => e.name === "logged_out")).toEqual([
+      { name: "logged_out", params: { scanned: true } },
+    ]);
+  });
+
   test("following the route to the official page is counted, without the URL", async ({ page }) => {
     // The withdrawal happens on Spotify's site, where this product cannot follow. Clicking through
     // is the last thing it can observe, so it is the only real conversion signal there is.

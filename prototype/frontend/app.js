@@ -72,10 +72,16 @@ let sessionEmail = "";
 /** The Gmail account the scan actually read, from users/me/profile. Not sessionEmail. */
 let scannedAccount = "";
 
+// data-safety, not just data-out, because this one anchor points at two different things. For a
+// catalogued row siteUrl is the catalog's own withdrawal URL; for an uncatalogued one it is
+// https://{sender domain}, a guess, which is what #linkNote warns about. They look identical in the
+// table, so counting them as one number would answer neither question.
 function serviceCell(s) {
   const name = escapeHtml(s.displayName || s.registrableDomain || "");
   if (s.siteUrl) {
-    return `<a href="${escapeHtml(s.siteUrl)}" target="_blank" rel="noopener noreferrer">${name}</a>`;
+    return `<a href="${escapeHtml(s.siteUrl)}" data-out="list" data-safety="${escapeHtml(
+      s.linkSafety || "inferred"
+    )}" target="_blank" rel="noopener noreferrer">${name}</a>`;
   }
   return name;
 }
@@ -461,6 +467,9 @@ function requestGmailToken() {
 hiddenToggle?.addEventListener("click", () => {
   hiddenOpen = !hiddenOpen;
   hiddenBody?.classList.toggle("hidden", !hiddenOpen);
+  // Only the open. Counting the close too would double every curious user and answer nothing:
+  // the question is whether anyone looks at what we threw away, not how long they looked.
+  if (hiddenOpen) track("excluded_opened", { excluded: lastSnapshot ? lastSnapshot.hidden.length + lastSnapshot.unresolved.length : 0 });
 });
 
 hiddenRows?.addEventListener("click", (ev) => {
@@ -470,6 +479,10 @@ hiddenRows?.addEventListener("click", (ev) => {
   const item = [...lastSnapshot.hidden, ...lastSnapshot.unresolved][idx];
   if (!item?.key) return;
 
+  // The rule's own name, which is ours. A rule that gets restored half the time is a bug report
+  // we would otherwise never receive: the user is telling us our exclusion was wrong, and this is
+  // the only channel that carries it back.
+  track("sender_restored", { reason: item.hiddenRule || "unresolved" });
   userVerdict.set(item.key, "candidate");
   renderSnapshot(lastSnapshot);
 });
@@ -481,6 +494,14 @@ rows?.addEventListener("click", (ev) => {
   const item = lastSnapshot.services[idx];
   if (!item) return;
   openGuide(item, btn);
+});
+
+// The service name in the table is a link out, and it was the one outbound path with no counter.
+// Delegated on the tbody, which survives the reconcile that replaces its rows during a scan.
+rows?.addEventListener("click", (ev) => {
+  const link = ev.target.closest?.("a[data-out]");
+  if (!link) return;
+  track("outbound_click", { link: link.dataset.out, safety: link.dataset.safety });
 });
 
 // Every link out of the modal goes to someone else's site, and that is the last thing this product
@@ -503,6 +524,10 @@ guideBackdrop?.addEventListener("click", () => closeGuide());
 }
 
 scanBtn?.addEventListener("click", async () => {
+  // The funnel's first step. scan_completed alone cannot see anyone who bounced off the Google
+  // permission screen, which is exactly the moment this product asks for the most and is most
+  // likely to lose someone.
+  track("scan_started", {});
   err.textContent = "";
   meta.textContent = "";
   progressEl.textContent = "Gmail 권한 요청 중…";
@@ -618,6 +643,7 @@ scanBtn?.addEventListener("click", async () => {
 });
 
 logoutBtn?.addEventListener("click", async () => {
+  track("logged_out", { scanned: Boolean(lastSnapshot) });
   if (abortScan) abortScan.abort();
   if (gmailAccessToken && window.google?.accounts?.oauth2) {
     try {

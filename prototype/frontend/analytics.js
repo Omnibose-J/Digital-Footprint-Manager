@@ -42,10 +42,26 @@ const STRING_PARAMS = {
     "unavailable",
     "none",
   ]),
-  // Which kind of link left the modal, never which URL. "route" is the official withdrawal page,
-  // "source" the evidence we read it from, "mail" the user's own Gmail search. The href is the one
-  // thing on that anchor we must never send, and it is a string, so it is not in this list.
-  link: new Set(["route", "source", "mail"]),
+  // Which kind of link was followed, never which URL. "route" is the official withdrawal page,
+  // "source" the evidence we read it from, "mail" the user's own Gmail search, "list" the service
+  // name in the table. The href is the one thing on that anchor we must never send, and it is a
+  // string, so it is not in this list.
+  link: new Set(["route", "source", "mail", "list"]),
+  // How much we trust the link that was followed. The list renders a catalogued service and a
+  // guessed one identically, and this is the difference: whether people follow an address we
+  // inferred from a sender domain is a question about our own warning, not about their mail.
+  safety: new Set(["verified", "inferred"]),
+  // Which of our exclusion rules the user overrode with 복구. This is the rule's own name, ours,
+  // and it is the only way to learn which rule is wrong: a rule restored half the time is a bug
+  // report we would otherwise never receive.
+  reason: new Set([
+    "self",
+    "invalid_domain",
+    "relay_domain",
+    "personal_mailbox",
+    "payment_gateway",
+    "unresolved",
+  ]),
 };
 
 let ready = false;
