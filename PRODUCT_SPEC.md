@@ -272,6 +272,7 @@ Vercel fits only if the Gmail boundary stays in the browser: scan, parsing, and 
 | Concern | Rule | Verification |
 |---|---|---|
 | OAuth URL | One stable QA domain plus the Production domain; never register arbitrary Preview URLs | Origin and redirect URI match Google registration |
+| Authorized JavaScript origins | GIS reads **this list only** — the ID-token and token-client flows never touch Authorized redirect URIs. An unregistered origin fails as `400: origin_mismatch` **at click time**, after rendering a normal-looking button, so it does not announce itself. Registration is Cloud Console UI only: no API, no `gcloud`. Registered today: `https://dfm-prototype.vercel.app` (prototype Production). Pending: `http://localhost:3456` (local dev, without which the prototype cannot be signed into at all) | `curl -H "Origin: <o>" ".../gsi/button?client_id=<id>"` returns 403 when the origin is not allowed |
 | Auth separation | Product sign-in never grants Gmail access; request `gmail.readonly` incrementally at scan start; backend issues only an HttpOnly product session | Product session and cookies contain no Gmail token |
 | Processing boundary | Gmail access stays in Client Component/Worker; database stays in Node.js Functions | Zero Gmail token/header fields in Function traffic and logs |
 | Database | Serverless driver or pooler; lazy initialization | Connection-count load test stays below provider limit [S22] |
@@ -397,6 +398,20 @@ Its architecture also collides with §5 independently of the credential question
 **Salvageable now, independent of mailbox provider:** its §14/§15 header rules apply to the Gmail path as-is — representative-address priority (`From` → `Sender` → `Return-Path`), multiple `From` addresses aggregated separately, RFC 2047 encoded-word decoding, no global plus-addressing or dot stripping, control-character stripping from display names.
 
 **Status:** Active — reaffirmed 2026-07-15 against a concrete design. Revival condition unchanged: pilot evidence on where Korean-service signup mail actually lands.
+
+### Decision: No Gmail write scope; route mail cleanup to Gmail's own search - 2026-07-15
+
+**Context:** Residual mail from a service the user has already left sits in the inbox forever, and the Gmail API can remove it. Asked whether to add that.
+
+**The scope arithmetic decides it.** `messages.trash` requires `gmail.modify`; `messages.delete` and `batchDelete` require `https://mail.google.com/`. Both are restricted, and their consent strings are *"Read, compose, and send emails from your Gmail account"* and *"Read, compose, send, and permanently delete all your email from Gmail"* — against today's `gmail.readonly`, *"View your email messages and settings"* [S1].
+
+**Why refuse:** **the narrowest scope that can move one message to Trash also grants send-as-the-user.** No trash-only scope exists. This is the Naver app-password decision's argument verbatim — *the credential we hold grants everything, regardless of what we decide to use it for* — and rejecting it there while accepting it here would make that decision arbitrary. Incremental authorization (request only when the user clicks "clean up") genuinely defers the §7 connect-rate hit, but one click grants permanent mailbox write. Restricted-scope verification also requires justifying minimum necessary scope, and there is no answer to "why not use Gmail's own search and delete?" — because that is in fact the answer. Separately, the evidence mail **is** the only record that the account ever existed (§3: existence does not decay); deleting it means a re-scan can never rediscover it, and closure evidence disappears with it.
+
+**Instead — a Gmail deep link:** `https://mail.google.com/mail/u/{email}/#search/from%3A{domain}` opens the user's own Gmail with the sender pre-searched; they select and delete. Zero new scope, zero irreversible action by us, and it is the §4 boundary applied unchanged — the product prepares, routes, and explains; the user acts on the official surface, exactly as it does for account deletion itself. Verify the `u/{email}` form resolves the right account for multi-account users before shipping; `u/0` is an index and can open the wrong one.
+
+**Rejected:** `gmail.modify` behind incremental authorization (defers the consent cost, does not reduce the granted authority). Framing it as "trash only" (no such scope). Permanent delete via `https://mail.google.com/` (same objection, larger).
+
+**Status:** Active
 
 ### Prior decisions (2026-07-15, all Active; full text in v1 archive)
 
