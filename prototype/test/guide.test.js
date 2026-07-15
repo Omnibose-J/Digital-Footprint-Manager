@@ -57,24 +57,20 @@ describe("guide modal render states (R4)", () => {
     assert.match(html, /step-one/);
   });
 
-  it("unmatched shows 공식 탈퇴 경로 미확인 with distinct escaped list items", () => {
-    const html = renderGuideHtml({
-      candidate: {
-        displayName: "Unknown Shop",
-        registrableDomain: "unknown-shop.co.kr",
-        linkSafety: "inferred",
-      },
-      entry: null,
-      stale: false,
-      serviceName: "Unknown Shop",
-      maskedAccount: "so****@gmail.com",
-    });
-    assert.match(html, /공식 탈퇴 경로 미확인/);
-    assert.ok(!html.includes("공식 경로 없음(검증됨)"));
-    const liCount = (html.match(/<li>/g) || []).length;
-    assert.ok(liCount >= 8, `expected checklist+warnings as <li>, got ${liCount}`);
-    assert.match(html, /Unknown Shop/);
-    assert.match(html, /so\*\*\*\*@gmail\.com/);
+  it("has no uncatalogued rendering at all: no entry, no guide", () => {
+    // The old fallback answered every uncatalogued service with the same paragraph. On the real
+    // mailbox that was 59 of 63 rows, and three of the user's four guide opens. The row shows no
+    // button now, so this is unreachable; calling it anyway must break loudly rather than quietly
+    // grow the fallback back.
+    assert.throws(() =>
+      renderGuideHtml({
+        candidate: { displayName: "Unknown Shop", registrableDomain: "unknown-shop.co.kr" },
+        entry: null,
+        stale: false,
+        serviceName: "Unknown Shop",
+        maskedAccount: "so****@gmail.com",
+      })
+    );
   });
 
   it("ampersand in catalog step is HTML-escaped", () => {
@@ -262,17 +258,27 @@ describe("the Gmail deep link, which is the whole answer to 'where do I delete t
     assert.equal(gmailSearchUrl("a@b.com", "localhost"), null);
   });
 
-  it("never offers it for a free-mailbox sender", () => {
+  it("never offers it for a free-mailbox sender, even handed a catalogued one", () => {
     // A rescued 성균관대 SW사업단 keys on gmail.com. "from:gmail.com" is a search matching most of
     // the inbox, handed over with an invitation to delete.
+    //
+    // catalog.js gives a linkBlockedBy candidate no entry, so it gets no button and never opens a
+    // guide, which makes this state unreachable through the UI. The fence stays and is tested by
+    // constructing that state by hand: one edit to the matching rules is all that stands between
+    // this fence and telling someone to empty their own mailbox.
     const html = renderGuideHtml({
       candidate: {
         displayName: "성균관대학교 SW전문인재양성사업단",
         registrableDomain: "gmail.com",
-        linkSafety: "none",
+        linkSafety: "verified",
         linkBlockedBy: "free_mailbox",
       },
-      entry: null,
+      entry: {
+        deletion_route: "self_service",
+        url: "https://example.com/close",
+        steps: [],
+        last_verified_at: "2026-07-15",
+      },
       stale: false,
       serviceName: "성균관대학교 SW전문인재양성사업단",
       maskedAccount: "be****@g.skku.edu",
@@ -280,6 +286,8 @@ describe("the Gmail deep link, which is the whole answer to 'where do I delete t
     });
     assert.doesNotMatch(html, /mail\.google\.com/);
     assert.doesNotMatch(html, /탈퇴한 뒤 남은 메일/);
+    // The rest of the guide still renders: the fence is on the mail link, not on the whole modal.
+    assert.match(html, /탈퇴 경로/);
   });
 
   it("offers it for a real service domain, and says why we cannot do it ourselves", () => {

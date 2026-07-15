@@ -78,16 +78,10 @@ export function renderRequestTemplate({ serviceName, maskedAccount }) {
   return { subject, body, fullText: `제목: ${subject}\n\n${body}` };
 }
 
-function safetyBadge(candidate, entry, stale) {
-  if (entry && candidate.linkSafety === "verified") {
-    return stale
-      ? `<span class="guide-badge guide-badge-stale">검토 필요</span>`
-      : `<span class="guide-badge guide-badge-verified">verified</span>`;
-  }
-  if (candidate.linkSafety === "inferred") {
-    return `<span class="guide-badge guide-badge-inferred">inferred</span>`;
-  }
-  return `<span class="guide-badge guide-badge-unchecked">공식 탈퇴 경로 미확인</span>`;
+function safetyBadge(stale) {
+  return stale
+    ? `<span class="guide-badge guide-badge-stale">검토 필요</span>`
+    : `<span class="guide-badge guide-badge-verified">verified</span>`;
 }
 
 /**
@@ -100,7 +94,7 @@ function safetyBadge(candidate, entry, stale) {
  * thing the catalog knows, and it belongs above the button, not under it.
  */
 function prereqBlockHtml(entry) {
-  const items = entry?.prerequisites || [];
+  const items = entry.prerequisites || [];
   if (!items.length) return "";
   return `<section class="guide-section guide-prereq">
       <h3>먼저 확인하세요</h3>
@@ -108,30 +102,35 @@ function prereqBlockHtml(entry) {
     </section>`;
 }
 
-function routeBlockHtml(entry) {
-  if (!entry) {
-    return `<section class="guide-section">
-      <h3>탈퇴 경로</h3>
-      <p><strong>공식 탈퇴 경로 미확인.</strong> 이 서비스는 아직 확인하지 못했습니다. 아래 일반 체크리스트와 요청 템플릿으로 공식 경로를 직접 찾아 진행하세요.</p>
-    </section>`;
-  }
+/**
+ * `data-out` marks a link that leaves for someone else's site, which is the only place this product
+ * can report progress: we never see the withdrawal itself. The value is read by the click counter
+ * and is an enum we wrote, so no href or service name reaches analytics.
+ *
+ * `button` is set where following the link IS the withdrawal. That link was a 20px line of text,
+ * below any touch target, while the Gmail link next to it was already a button: the secondary
+ * action looked more like an action than the primary one. It is not set on email_request, where
+ * the template is the route and the link is only supporting guidance, and its text is a raw URL
+ * that has no business being a button's label.
+ */
+function outLink(href, text, kind, { button = false } = {}) {
+  const cls = button ? ` class="btn btn-primary guide-route-btn"` : "";
+  return `<a href="${escapeHtml(href)}"${cls} data-out="${kind}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+    text
+  )}</a>`;
+}
 
+function routeBlockHtml(entry) {
   const route = entry.deletion_route;
-  const url = escapeHtml(entry.url || "");
-  const steps = (entry.steps || [])
-    .map((s) => `<li>${escapeHtml(s)}</li>`)
-    .join("");
-  // Prerequisites now render above, in their own block. Kept empty here so the branches below
-  // that still interpolate it stay honest rather than duplicating the section.
-  const prereq = "";
+  const url = entry.url || "";
+  const steps = (entry.steps || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
 
   if (route === "unavailable") {
     return `<section class="guide-section">
       <h3>탈퇴 경로: 공식 경로 없음(검증됨)</h3>
       <p>${escapeHtml(entry.grace_period || "공식 자가 탈퇴 경로가 확인되지 않았습니다.")}</p>
       <p>안전한 대안: 데이터 최소화, 계정 비활성화(가능한 경우), 공식 고객지원 에스컬레이션.</p>
-      ${prereq ? `<ul>${prereq}</ul>` : ""}
-      ${entry.official_source_url ? `<p>근거: <a href="${escapeHtml(entry.official_source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(entry.official_source_url)}</a></p>` : ""}
+      ${entry.official_source_url ? `<p>근거: ${outLink(entry.official_source_url, entry.official_source_url, "source")}</p>` : ""}
     </section>`;
   }
 
@@ -139,9 +138,8 @@ function routeBlockHtml(entry) {
     return `<section class="guide-section">
       <h3>탈퇴 경로: 정보주체 권리행사</h3>
       <p>한국 공공 레일(privacy.go.kr)로 본인확인 이력이 있는 사이트 탈퇴를 신청합니다. eprivacy.go.kr를 진입점으로 쓰지 마세요.</p>
-      <p><a href="${url}" target="_blank" rel="noopener noreferrer">웹사이트 회원 탈퇴 신청</a></p>
+      <p>${outLink(url, "웹사이트 회원 탈퇴 신청", "route", { button: true })}</p>
       ${steps ? `<ol>${steps}</ol>` : ""}
-      ${prereq ? `<p>자격·제한</p><ul>${prereq}</ul>` : ""}
     </section>`;
   }
 
@@ -149,16 +147,14 @@ function routeBlockHtml(entry) {
     return `<section class="guide-section">
       <h3>탈퇴 경로: 이메일 요청</h3>
       <p>아래 한국어 템플릿을 검토한 뒤 본인 메일 클라이언트에서 발송하세요. 자동 발송하지 않습니다.</p>
-      ${entry.url ? `<p>안내: <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a></p>` : ""}
-      ${prereq ? `<ul>${prereq}</ul>` : ""}
+      ${url ? `<p>안내: ${outLink(url, url, "route")}</p>` : ""}
     </section>`;
   }
 
   if (route === "contact_form") {
     return `<section class="guide-section">
       <h3>탈퇴 경로: 공식 양식</h3>
-      <p><a href="${url}" target="_blank" rel="noopener noreferrer">공식 문의/신청 양식</a></p>
-      ${prereq ? `<p>준비 사항</p><ul>${prereq}</ul>` : ""}
+      <p>${outLink(url, "공식 문의/신청 양식", "route", { button: true })}</p>
       ${steps ? `<ol>${steps}</ol>` : ""}
     </section>`;
   }
@@ -166,16 +162,23 @@ function routeBlockHtml(entry) {
   // self_service default
   return `<section class="guide-section">
     <h3>탈퇴 경로: 자가 탈퇴</h3>
-    <p><a href="${url}" target="_blank" rel="noopener noreferrer">공식 탈퇴/삭제 페이지</a></p>
+    <p>${outLink(url, "공식 탈퇴/삭제 페이지", "route", { button: true })}</p>
     ${entry.grace_period ? `<p>유예: ${escapeHtml(entry.grace_period)}</p>` : ""}
     ${steps ? `<ol>${steps}</ol>` : ""}
-    ${prereq ? `<p>사전 조건</p><ul>${prereq}</ul>` : ""}
   </section>`;
 }
 
 /**
  * Build modal inner HTML for a candidate.
- * @param {{ candidate: any, entry: any|null, stale: boolean, serviceName: string, maskedAccount: string }} opts
+ *
+ * `entry` is REQUIRED. There is no uncatalogued rendering: without an entry we have no verified
+ * route, no privacy contact for the template to reach, and nothing to say that is about this
+ * service rather than all of them, so the row shows no button at all and this is never called.
+ * The 2026-07-15 scan is why: 63 services found, 4 catalogued, and 3 of the user's 4 guide opens
+ * landed on the generic text. A fallback that answers every question with the same paragraph is
+ * not an answer, it is a way to not notice that 59 rows have none.
+ *
+ * @param {{ candidate: any, entry: any, stale: boolean, serviceName: string, maskedAccount: string, scannedAccount?: string }} opts
  */
 export function renderGuideHtml({
   candidate,
@@ -187,9 +190,7 @@ export function renderGuideHtml({
 }) {
   const name = escapeHtml(serviceName || candidate.displayName || "");
   const domain = escapeHtml(candidate.registrableDomain || "");
-  const verifiedAt = entry?.last_verified_at
-    ? escapeHtml(entry.last_verified_at)
-    : "—";
+  const verifiedAt = escapeHtml(entry.last_verified_at || "");
   const template = renderRequestTemplate({ serviceName, maskedAccount });
 
   const checklist = CHECKLIST.map((c) => `<li>${escapeHtml(c)}</li>`).join("");
@@ -198,21 +199,20 @@ export function renderGuideHtml({
   // Route-independent, so it sits outside routeBlockHtml's five branches rather than being
   // repeated in each. The catalog has carried this field since the seed entries and nothing
   // ever rendered it: what you must prove to close an account is worth knowing before you start.
-  const identity = entry?.identity_verification
+  const identity = entry.identity_verification
     ? `<section class="guide-section">
       <h3>본인확인</h3>
       <p>${escapeHtml(entry.identity_verification)}</p>
     </section>`
     : "";
 
-  const staleNote =
-    stale && entry
-      ? `<p class="guide-stale-note">이 안내의 검토 기한이 지났습니다 (last_verified_at: ${verifiedAt}). 링크는 보여 드리지만 최신으로 단정하지 마세요.</p>`
-      : "";
+  const staleNote = stale
+    ? `<p class="guide-stale-note">이 안내의 검토 기한이 지났습니다 (last_verified_at: ${verifiedAt}). 링크는 보여 드리지만 최신으로 단정하지 마세요.</p>`
+    : "";
 
   // The template is the whole point of an email_request route and a footnote everywhere else, so it
   // only opens by default where sending it IS the withdrawal.
-  const templateIsTheRoute = entry?.deletion_route === "email_request" || !entry;
+  const templateIsTheRoute = entry.deletion_route === "email_request";
 
   // Only for a real service domain. A rescued free-mailbox sender keys on gmail.com, and
   // "from:gmail.com" would hand the user a search matching most of their inbox and an invitation
@@ -224,7 +224,7 @@ export function renderGuideHtml({
     ? `<section class="guide-section">
       <h3>탈퇴한 뒤 남은 메일</h3>
       <p class="note">저희는 메일을 지울 수 없습니다. 지우려면 Google이 "이 앱이 회원님 이름으로 메일을 보낼 수 있도록 허용"까지 함께 요구하고, 휴지통 전용 권한은 존재하지 않습니다. 대신 본인 Gmail에서 이 발신자만 검색된 상태로 열어 드립니다.</p>
-      <p><a class="btn btn-quiet" href="${escapeHtml(mailUrl)}" target="_blank" rel="noopener noreferrer">Gmail에서 이 발신자 메일 보기</a></p>
+      <p><a class="btn btn-quiet" href="${escapeHtml(mailUrl)}" data-out="mail" target="_blank" rel="noopener noreferrer">Gmail에서 이 발신자 메일 보기</a></p>
       <p class="note">탈퇴 확인 메일까지 지우면 재스캔했을 때 이 계정을 정리했다는 사실이 남지 않습니다.</p>
     </section>`
     : "";
@@ -232,7 +232,7 @@ export function renderGuideHtml({
   return `
     <div class="guide-header">
       <h2 id="guideTitle">${name}</h2>
-      <p class="guide-meta">${domain} · ${safetyBadge(candidate, entry, stale)} · 확인일 ${verifiedAt}</p>
+      <p class="guide-meta">${domain} · ${safetyBadge(stale)} · 확인일 ${verifiedAt}</p>
       ${staleNote}
     </div>
     ${prereqBlockHtml(entry)}

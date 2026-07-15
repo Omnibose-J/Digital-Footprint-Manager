@@ -1,15 +1,20 @@
 /**
  * Google Analytics, with a boundary.
  *
- * THE RULE: nothing derived from the user's mailbox may leave this file's callers. Not a domain,
- * not a service name, not a sender address, not a count of what they have. The screen next to this
- * one promises "메일이 서버로 가지 않습니다", and shipping "탈퇴 안내 clicked · coupang.com" to
- * Google Analytics would break that promise more quietly than sending the mail itself, because
- * the account list is the thing the mail was only ever evidence for.
+ * THE RULE: no identifier read out of the mailbox may leave this file's callers. Not a domain, not
+ * a service name, not a sender address. The screen next to this one promises "메일이 서버로 가지
+ * 않습니다", and shipping "탈퇴 안내 clicked · coupang.com" to Google Analytics would break that
+ * promise more quietly than sending the mail itself, because the account list is the thing the mail
+ * was only ever evidence for.
  *
- * So the events below carry shape, never content: that a guide was opened, not whose. Counts and
- * durations are fine (they describe our product); identifiers are not (they describe the user).
- * If a new event needs a mailbox-derived parameter to be useful, that event is the wrong event.
+ * Aggregate counts DO leave, and saying otherwise would be a lie about the code below:
+ * scan_completed carries how many messages were read and how many candidates came back. That is a
+ * fact about their mailbox, weakly, and it is sent knowingly. It buys the band distribution and the
+ * catalog miss rate, which is what tells us the product is wrong; a count of 63 names nothing and
+ * reaches no one. An identifier would. That line, not the count/no-count line, is the boundary.
+ *
+ * So the events carry shape, never content: that a guide was opened, not whose. If a new event
+ * needs a name, a domain, or an address to be useful, that event is the wrong event.
  *
  * gtag also collects page_location and referrer on its own. Both are constant here because this is
  * a single static page with no per-user routing, which is the only reason that is acceptable.
@@ -37,6 +42,10 @@ const STRING_PARAMS = {
     "unavailable",
     "none",
   ]),
+  // Which kind of link left the modal, never which URL. "route" is the official withdrawal page,
+  // "source" the evidence we read it from, "mail" the user's own Gmail search. The href is the one
+  // thing on that anchor we must never send, and it is a string, so it is not in this list.
+  link: new Set(["route", "source", "mail"]),
 };
 
 let ready = false;

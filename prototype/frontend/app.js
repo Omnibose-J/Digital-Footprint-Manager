@@ -66,6 +66,8 @@ let hiddenOpen = false;
 let catalog = null;
 /** @type {HTMLElement | null} */
 let guideTrigger = null;
+/** Route of the guide currently on screen, for the outbound counter below. */
+let guideRoute = "none";
 let sessionEmail = "";
 /** The Gmail account the scan actually read, from users/me/profile. Not sessionEmail. */
 let scannedAccount = "";
@@ -82,12 +84,13 @@ function deletionCell(s, index) {
   if (s.likelyClosed) {
     return `<span class="band band-closed">폐쇄 추정</span>`;
   }
-  const label =
-    s.linkSafety === "verified"
-      ? isStale(s.catalogEntry || {})
-        ? "탈퇴 (검토 필요)"
-        : "탈퇴"
-      : "탈퇴 안내";
+  // Without a catalog entry there is no verified route, no privacy contact for the request
+  // template to reach, and nothing to say that is about THIS service. The old button opened
+  // generic advice, which reads as an answer and is not one. State the gap instead.
+  if (s.linkSafety !== "verified") {
+    return `<span class="cell-none" title="이 서비스의 공식 탈퇴 경로를 아직 확인하지 못했습니다">경로 미확인</span>`;
+  }
+  const label = isStale(s.catalogEntry || {}) ? "탈퇴 (검토 필요)" : "탈퇴";
   return `<button type="button" class="btn-row" data-guide="${index}">${label}</button>`;
 }
 
@@ -133,15 +136,18 @@ function withCatalog(rawSnapshot) {
   return sortBuckets(upgradeSnapshot(overridden, catalog));
 }
 
+// data-label carries the column header down into the cell, because on a phone the table stacks
+// into cards and the <thead> is gone. Without it "2025-01" and "2" sit in a card with nothing
+// saying which is the last trace and which is the message count.
 function rowHtml(s, i) {
-  return `<td>${i + 1}</td>
+  return `<td class="cell-rank">${i + 1}</td>
       <td class="cell-service">${serviceCell(s)}</td>
       <td class="cell-domain">${escapeHtml(s.registrableDomain || "")}</td>
-      <td>${cleanupCell(s)}</td>
-      <td>${bandCell(s)}</td>
-      <td class="cell-month">${escapeHtml(s.lastSeenMonth || "—")}</td>
-      <td class="col-count">${s.messageCount}</td>
-      <td>${deletionCell(s, i)}</td>`;
+      <td data-label="정리 우선도">${cleanupCell(s)}</td>
+      <td data-label="신뢰">${bandCell(s)}</td>
+      <td class="cell-month" data-label="마지막 흔적">${escapeHtml(s.lastSeenMonth || "—")}</td>
+      <td class="col-count" data-label="건수">${s.messageCount}</td>
+      <td class="cell-action">${deletionCell(s, i)}</td>`;
 }
 
 /**
@@ -295,10 +301,14 @@ function setLoggedOutUI() {
 
 function openGuide(candidate, trigger) {
   if (!candidate || !guideModal || !guideBody) return;
+  // No entry means deletionCell rendered no button, so nothing can have called this. Reading the
+  // field and leaving rather than rendering a guide with nothing in it: the uncatalogued modal is
+  // gone on purpose and this must not quietly grow back into one.
+  const entry = candidate.catalogEntry;
+  if (!entry) return;
   guideTrigger = trigger || null;
-  const entry = candidate.catalogEntry || null;
-  const stale = entry ? isStale(entry) : false;
-  const serviceName = entry?.display_name || candidate.displayName || candidate.registrableDomain || "";
+  const stale = isStale(entry);
+  const serviceName = entry.display_name || candidate.displayName || candidate.registrableDomain || "";
   // The scanned mailbox, not the signed-in one. Falls back to the session only before a scan
   // has run, which is the only moment the two cannot disagree.
   const masked = maskAccount(scannedAccount || sessionEmail);
@@ -314,13 +324,14 @@ function openGuide(candidate, trigger) {
   guideModal.classList.remove("hidden");
   guideModal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
-  // band and route are our own enums; catalogued is a boolean about our coverage, not about them.
+  // band and route are our own enums. catalogued is gone: every guide that opens is catalogued now,
+  // so the parameter had one value and measured nothing. scan_completed.no_route counts the rest.
   track("guide_opened", {
     band: candidate.discoveryBand || "low",
-    catalogued: Boolean(entry),
-    route: entry?.deletion_route || "none",
+    route: entry.deletion_route || "none",
     stale,
   });
+  guideRoute = entry.deletion_route || "none";
   guideClose?.focus();
 
   const copyBtn = document.getElementById("guideCopyBtn");
@@ -469,6 +480,15 @@ rows?.addEventListener("click", (ev) => {
   openGuide(item, btn);
 });
 
+// Every link out of the modal goes to someone else's site, and that is the last thing this product
+// can see: the withdrawal happens where we are not. Bound once, here, rather than per open, because
+// guideBody survives the modal closing and re-binding it would fire the event once per open so far.
+guideBody?.addEventListener("click", (ev) => {
+  const link = ev.target.closest?.("a[data-out]");
+  if (!link) return;
+  track("outbound_click", { link: link.dataset.out, route: guideRoute });
+});
+
 guideClose?.addEventListener("click", () => closeGuide());
 guideBackdrop?.addEventListener("click", () => closeGuide());
 {
@@ -562,6 +582,12 @@ scanBtn?.addEventListener("click", async () => {
       low: bands.low,
       excluded: finalSnap.stats.hidden + finalSnap.stats.unresolved,
       errors: result.errors,
+      // Catalog coverage, which the click used to report. guide_opened{catalogued:false} was the
+      // one signal telling us which routes users reach for and we lack; removing that button to
+      // stop promising an answer we do not have also removed the way to count the demand. This is
+      // our catalog's miss rate, not a fact about their mailbox, so it belongs in the same event.
+      no_route: finalSnap.services.filter((s) => !s.likelyClosed && s.linkSafety !== "verified")
+        .length,
     });
 
     console.info("[dfm] scan", {

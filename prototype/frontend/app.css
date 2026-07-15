@@ -944,8 +944,14 @@ tr.row-closed td {
   margin-bottom: var(--s2);
 }
 
-.guide-section a {
+/* :not(.btn) because this rule outranks .btn-primary: a class plus a type selector beats a class,
+   so a link styled as a button was painted accent-on-accent and its label vanished. */
+.guide-section a:not(.btn) {
   color: var(--accent-text);
+}
+
+.guide-route-btn {
+  min-height: 44px;
 }
 
 .guide-meta {
@@ -994,6 +1000,90 @@ tr.row-closed td {
 @media (max-width: 860px) {
   .hero {
     grid-template-columns: 1fr;
+  }
+}
+
+/* The phone.
+ *
+ * The eight-column table is 1000px wide by design, and inside an overflow-x wrapper it did not
+ * break a 390px screen: it just put 탈퇴 at x=983, so reaching the product's only action meant
+ * scrolling the table sideways past six columns of evidence. Nothing was visibly wrong, which is
+ * the reason nobody noticed.
+ *
+ * So on a phone the table stops being a table. Each row becomes a card led by the service name and
+ * closed by the button, with the supporting numbers labelled in between. The markup does not
+ * change, which keeps this replaceable when the design lands. */
+@media (max-width: 640px) {
+  .table-wrap {
+    overflow-x: visible;
+  }
+  .table-services {
+    min-width: 0;
+    table-layout: auto;
+  }
+  .table-services colgroup,
+  .table-services thead {
+    display: none;
+  }
+  .table-services,
+  .table-services tbody,
+  .table-services tr,
+  .table-services td {
+    display: block;
+    width: auto;
+  }
+  .table-services tr {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    padding: var(--s4);
+    margin-bottom: var(--s3);
+  }
+  .table-services td {
+    border: 0;
+    padding: 2px 0;
+  }
+  /* The rank is the card's number, not a row of its own. */
+  .cell-rank {
+    position: absolute;
+    top: var(--s4);
+    right: var(--s4);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.45;
+  }
+  .table-services .cell-service {
+    font-weight: 600;
+    padding-right: var(--s6);
+  }
+  .table-services .cell-domain {
+    opacity: 0.6;
+    padding-bottom: var(--s3);
+  }
+  /* Label the numbers, since the header row that explained them is gone. */
+  .table-services td[data-label] {
+    display: flex;
+    gap: var(--s3);
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .table-services td[data-label]::before {
+    content: attr(data-label);
+    opacity: 0.6;
+    flex: none;
+  }
+  .table-services td[data-label] > * {
+    text-align: right;
+  }
+  .table-services .cell-action {
+    padding-top: var(--s3);
+  }
+  /* Full width and a real height: this is the tap the whole screen exists for. */
+  .table-services .cell-action .btn-row {
+    width: 100%;
+    min-height: 44px;
+  }
+  .score-why {
+    display: block;
   }
 }
 

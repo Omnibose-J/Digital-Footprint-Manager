@@ -21,6 +21,22 @@ function mailbox() {
       date: "2024-03-10",
       headers: authenticated("spotify.com"),
     }),
+    // A real account we have no deletion route for. The 2026-07-15 scan found 63 services and the
+    // catalog matched 4 of them, so this is the majority case, not an edge one.
+    gmailMessage({
+      id: "v1",
+      from: "Vercel <no-reply@vercel.com>",
+      subject: "가입이 완료되었습니다",
+      date: "2024-02-11",
+      headers: authenticated("vercel.com"),
+    }),
+    gmailMessage({
+      id: "v2",
+      from: "Vercel <no-reply@vercel.com>",
+      subject: "비밀번호 재설정 안내",
+      date: "2024-05-11",
+      headers: authenticated("vercel.com"),
+    }),
     // An old account with no signup mail left: auth across three months plus notifications.
     // This is the GitHub case, 65 points and capped, until auth started accumulating.
     gmailMessage({
@@ -185,6 +201,79 @@ test.describe("the scan a user actually sees", () => {
     await expect(modal).toBeHidden();
   });
 
+  test("following the route to the official page is counted, without the URL", async ({ page }) => {
+    // The withdrawal happens on Spotify's site, where this product cannot follow. Clicking through
+    // is the last thing it can observe, so it is the only real conversion signal there is.
+    await runScan(page);
+    // Opened, closed, opened again before the click. guideBody survives the close, so a listener
+    // bound per open would report this single click twice. That was the first version of this.
+    const openGuideFor = async (domain) =>
+      page.locator("#rows tr", { hasText: domain }).getByRole("button").click();
+    await openGuideFor("spotify.com");
+    await page.click("#guideClose");
+    await openGuideFor("spotify.com");
+
+    const routeLink = page.locator('#guideBody a[data-out="route"]');
+    await expect(routeLink).toHaveCount(1);
+    const [popup] = await Promise.all([page.waitForEvent("popup"), routeLink.click()]);
+    await popup.close();
+
+    const clicks = await page.evaluate(() =>
+      (window.dataLayer || [])
+        .map((a) => Array.from(a))
+        .filter((a) => a[0] === "event" && a[1] === "outbound_click")
+        .map((a) => a[2])
+    );
+    // Once, not once per guide ever opened: guideBody outlives the modal, so binding the listener
+    // on open would have made the third click report three.
+    expect(clicks).toEqual([{ link: "route", route: "self_service" }]);
+    expect(JSON.stringify(clicks)).not.toContain("spotify");
+  });
+
+  test("a service we have no route for offers no button, because the guide had nothing to say", async ({ page }) => {
+    // Vercel is a real account here: signup + auth, high band. What we do NOT have is its official
+    // withdrawal route or a privacy contact, so the request template has nowhere to go and the
+    // modal could only have shown advice identical for every service. A button promising 탈퇴 안내
+    // and delivering that is worse than admitting the gap.
+    await runScan(page);
+    const unmatched = page.locator("#rows tr", { hasText: "vercel.com" });
+    await expect(unmatched).toBeVisible();
+    await expect(unmatched.getByRole("button")).toHaveCount(0);
+    await expect(unmatched).toContainText("경로 미확인");
+
+    // The catalog-matched row keeps its button, so this is the gap talking and not a dead column.
+    await expect(
+      page.locator("#rows tr", { hasText: "spotify.com" }).getByRole("button")
+    ).toHaveCount(1);
+  });
+
+  test("analytics reports the catalog gap and never what is in the mailbox", async ({ page }) => {
+    await runScan(page);
+    const scan = await page.evaluate(() =>
+      (window.dataLayer || [])
+        .map((a) => Array.from(a))
+        .filter((a) => a[0] === "event" && a[1] === "scan_completed")
+        .map((a) => a[2])[0]
+    );
+    expect(scan).toBeTruthy();
+
+    // Vercel has no catalog entry; Spotify, GitHub and 옥션 do. The count is what the removed
+    // button used to report by being clicked.
+    expect(scan.no_route).toBeGreaterThan(0);
+    expect(scan.candidates).toBeGreaterThanOrEqual(scan.no_route);
+
+    // The boundary, asserted against the real event and not a hand-built one: every value that
+    // leaves is a number, a boolean, or a string we wrote ourselves. A domain reaching GA is the
+    // failure this product cannot survive, and it would arrive as a string.
+    for (const [k, v] of Object.entries(scan)) {
+      expect(typeof v, `scan_completed.${k} = ${v}`).not.toBe("string");
+    }
+    const serialised = JSON.stringify(await page.evaluate(() => window.dataLayer.map((a) => Array.from(a))));
+    for (const leak of ["spotify.com", "vercel.com", "github.com", "auction.co.kr", SELF, "Spotify", "Vercel"]) {
+      expect(serialised, `${leak} reached the dataLayer`).not.toContain(leak);
+    }
+  });
+
   test("the list leads with what to clean up, not with what we are surest about", async ({ page }) => {
     // The whole point of the reorder. Spotify (2024, dormant) and GitHub (2025, recent) are both
     // high-band, and confidence alone put GitHub near the top: the account being used every day.
@@ -242,7 +331,11 @@ test.describe("the scan a user actually sees", () => {
   });
 
   test("the page never scrolls sideways, only the table does", async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+    // 800px, not 390: below 640 the table stops being a table and becomes cards, so there is
+    // nothing left to scroll sideways and this assertion has no subject. The phone widths are
+    // covered in phone.spec.js. Between 640 and the table's 1000px this is still the live case:
+    // eight columns wider than the window, contained by the wrapper instead of widening the page.
+    await page.setViewportSize({ width: 800, height: 900 });
     await runScan(page);
     const m = await page.evaluate(() => {
       const d = document.documentElement;

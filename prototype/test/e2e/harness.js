@@ -70,6 +70,10 @@ export async function installFakeGoogle(page, { account = "tester@gmail.com", me
 
   await page.route("**/gsi/client", (route) => route.fulfill({ status: 200, body: "" }));
 
+  // gtag.js is stubbed, not loaded: the tests must never reach Google, and what we assert is what
+  // our code PUSHES, which lands in window.dataLayer whether or not the real tag ever answers.
+  await page.route("**/gtag/js**", (route) => route.fulfill({ status: 200, body: "" }));
+
   await page.route("**/api/config", (route) =>
     route.fulfill({
       json: {
@@ -77,6 +81,9 @@ export async function installFakeGoogle(page, { account = "tester@gmail.com", me
         maxMessages: 0,
         concurrency: 4,
         gmailScope: "https://www.googleapis.com/auth/gmail.readonly",
+        // Without this initAnalytics returns early and every track() call is a no-op, so the
+        // analytics path had no browser coverage at all: the unit tests drive a fake window.
+        gaMeasurementId: "G-E2ETEST",
       },
     })
   );
