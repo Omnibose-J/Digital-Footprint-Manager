@@ -206,3 +206,42 @@ describe("bands and month maths", () => {
     assert.equal(monthsSince("2025-07", NOW), 12);
   });
 });
+
+describe("a row we can do nothing about is not ranked first", () => {
+  it("a free-mailbox candidate gets no cleanup rank, however dormant", () => {
+    // 성균관대학교 SW전문인재양성사업단 took #1 of 63 on the 2026-07-15 scan from a gmail.com
+    // address: 보류 26, dormant 18 months, and 경로 미확인 in the one column that says what to do.
+    // A blocked link means the domain is not a company, so there is no route, no site link and no
+    // Gmail search this row could ever carry. "Deal with this first" needs a second half.
+    const r = computeCleanupScore(
+      {
+        discoveryBand: "high",
+        lastSeenMonth: "2025-01",
+        registrableDomain: "gmail.com",
+        linkSafety: "none",
+        linkBlockedBy: "free_mailbox",
+        families: {},
+      },
+      new Date("2026-07-15T00:00:00Z")
+    );
+    assert.equal(r.cleanupScore, null);
+    assert.equal(r.cleanupBand, null);
+  });
+
+  it("an uncatalogued REAL domain is still ranked, because that gap is ours and not theirs", () => {
+    // The distinction this rests on. vercel.com is a company we have not written up; gmail.com is
+    // not a company. Withholding a rank for the first would sort by our catalog's coverage.
+    const r = computeCleanupScore(
+      {
+        discoveryBand: "high",
+        lastSeenMonth: "2024-02",
+        registrableDomain: "vercel.com",
+        linkSafety: "inferred",
+        linkBlockedBy: null,
+        families: {},
+      },
+      new Date("2026-07-15T00:00:00Z")
+    );
+    assert.ok(r.cleanupScore > 0, `expected a rank, got ${r.cleanupScore}`);
+  });
+});

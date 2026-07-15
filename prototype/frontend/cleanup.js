@@ -126,6 +126,20 @@ export function computeCleanupScore(candidate, now = new Date()) {
   if (candidate.discoveryBand !== "high") {
     return { cleanupScore: null, cleanupBand: null, inUse: false, cleanupWhy: "", axes: {} };
   }
+  // A blocked link means the domain is not a company: a free mailbox, a relay, the user's own
+  // address. Such a row can never carry a withdrawal route, a site link, or a Gmail search, so
+  // "deal with this first" has no second half — there is nothing for the user to then do.
+  //
+  // This is not the same as an uncatalogued row, which the block below deliberately still scores:
+  // vercel.com is a real company we simply have not written up yet, and withholding its rank would
+  // sort by our coverage instead of their data. gmail.com is not a company at all.
+  //
+  // The 2026-07-15 scan is why this is here: 성균관대학교 SW전문인재양성사업단, sending from
+  // gmail.com, scored 보류 26 and took #1 of 63 — the top of a list whose only instruction for it
+  // was 경로 미확인.
+  if (candidate.linkBlockedBy) {
+    return { cleanupScore: null, cleanupBand: null, inUse: false, cleanupWhy: "", axes: {} };
+  }
 
   const entry = candidate.catalogEntry || null;
   const axes = {
