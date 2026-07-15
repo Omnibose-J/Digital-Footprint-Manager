@@ -3,9 +3,6 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { OAuth2Client } from "google-auth-library";
-// One DNS rule, one place. filter.js is plain ESM with no browser API, and a second copy
-// here would drift from the one the scan actually validates against.
-import { isValidDnsHost } from "../frontend/filter.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, "..", "frontend");
@@ -16,8 +13,6 @@ const maxMessages = Number(process.env.GMAIL_MAX_MESSAGES || 0);
 
 /** Approved candidate domains per user sub (no full sender addresses) */
 /** @type {Map<string, { domains: Array<{ domain: string, count: number }>, savedAt: string }>} */
-const savedCandidates = new Map();
-
 const oauthClient = clientId ? new OAuth2Client(clientId) : null;
 
 /** PRODUCT_SPEC §6 / SOW 005 R2 — GIS sign-in must keep working (H3). */
@@ -198,57 +193,6 @@ app.post("/api/auth/logout", (req, res) => {
 /**
  * Save approved candidate domains only (never full sender addresses / Gmail tokens).
  */
-app.post("/api/candidates", async (req, res) => {
-  const session = await requireSession(req, res);
-  if (!session) return;
-
-  const domains = Array.isArray(req.body?.domains) ? req.body.domains : [];
-  const cleaned = [];
-  const seen = new Set();
-
-  for (const item of domains) {
-    const domain = String(item?.domain || item || "")
-      .trim()
-      .toLowerCase()
-      .replace(/^@/, "");
-    if (!domain || seen.has(domain)) continue;
-    if (domain.length > 253) continue;
-    if (!isValidDnsHost(domain)) continue;
-    seen.add(domain);
-    cleaned.push({
-      domain,
-      count: Math.max(0, Number(item?.count) || 0),
-    });
-  }
-
-  if (cleaned.length > 2000) {
-    res.status(400).json({ error: "Too many domains" });
-    return;
-  }
-
-  const record = {
-    domains: cleaned,
-    savedAt: new Date().toISOString(),
-  };
-  savedCandidates.set(session.sub, record);
-
-  res.json({
-    ok: true,
-    saved: cleaned.length,
-    savedAt: record.savedAt,
-  });
-});
-
-app.get("/api/candidates", async (req, res) => {
-  const session = await requireSession(req, res);
-  if (!session) return;
-  const record = savedCandidates.get(session.sub) || {
-    domains: [],
-    savedAt: null,
-  };
-  res.json(record);
-});
-
 app.use(express.static(publicDir));
 
 // On Vercel the platform invokes the exported app; binding a port there would hang the build.

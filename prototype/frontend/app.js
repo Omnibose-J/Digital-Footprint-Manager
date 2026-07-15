@@ -26,7 +26,6 @@ const hiddenRows = el("hiddenRows");
 const linkNote = el("linkNote");
 const emptyState = el("emptyState");
 const scanBtn = el("scan");
-const saveBtn = el("save");
 const logoutBtn = el("logout");
 const guideModal = el("guideModal");
 const guideBackdrop = el("guideBackdrop");
@@ -164,7 +163,6 @@ function renderSnapshot(rawSnapshot) {
     })
     .join("");
 
-  saveBtn.disabled = services.length === 0;
   emptyState?.classList.toggle("hidden", services.length > 0);
 }
 
@@ -217,7 +215,6 @@ function setLoggedOutUI() {
   lastSnapshot = null;
   gmailAccessToken = null;
   sessionEmail = "";
-  saveBtn.disabled = true;
   linkNote.classList.add("hidden");
   hiddenBody.classList.add("hidden");
   hiddenOpen = false;
@@ -393,7 +390,6 @@ scanBtn?.addEventListener("click", async () => {
   lastSnapshot = null;
   userVerdict.clear();
   scanBtn.disabled = true;
-  saveBtn.disabled = true;
   linkNote.classList.add("hidden");
 
   if (abortScan) abortScan.abort();
@@ -457,32 +453,6 @@ scanBtn?.addEventListener("click", async () => {
     err.textContent = String(e.message || e);
   } finally {
     scanBtn.disabled = false;
-  }
-});
-
-saveBtn?.addEventListener("click", async () => {
-  err.textContent = "";
-  const services = lastSnapshot?.services || [];
-  // Fold by domain: free-mailbox rescues are per-address, so two candidates can share
-  // one registrable domain. The server keeps the first and drops the rest, not the sum.
-  const byDomain = new Map();
-  for (const s of services) {
-    if (!s.registrableDomain) continue;
-    byDomain.set(s.registrableDomain, (byDomain.get(s.registrableDomain) || 0) + s.messageCount);
-  }
-  const domains = [...byDomain].map(([domain, count]) => ({ domain, count }));
-
-  try {
-    const res = await fetch("/api/candidates", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domains }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || res.statusText);
-    meta.textContent = `${meta.textContent || ""} · 서버 저장: 도메인 ${data.saved}개 (${data.savedAt})`;
-  } catch (e) {
-    err.textContent = String(e.message || e);
   }
 });
 

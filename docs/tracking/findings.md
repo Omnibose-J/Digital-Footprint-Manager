@@ -4,6 +4,47 @@ Problems found while doing other work, verified, and deliberately not fixed ther
 says why it could not be solved at the time and what it costs to leave. Delete an entry when it
 is fixed, not when it is noticed.
 
+## The scan pays for gmail.readonly and does not use it (2026-07-15, designed not built)
+
+`scan.js` calls `messages.list` with no `q`. It enumerates the whole mailbox, fetches every
+message at 20 units, and then classifies by substring-matching hand-written Korean phrases.
+PRODUCT_SPEC §3 prescribes the opposite: catalog probes at `q="from:{domain}"` for 5 units and no
+fetch, then family-scoped queries, then priority-ordered fetches with a 1,200 cap. Spec line 79 is
+explicit that `q=` is why we chose `gmail.readonly` at all, a restricted scope carrying OAuth
+verification and a possible annual security assessment. We are paying that price for a feature we
+do not call.
+
+Measured on an 811-message scan: 16,230 units, 2.7 minutes, of which 3,780 went to the 189
+messages that classified as `unknown` and scored zero. A 3,000-message mailbox costs 60,000 units
+and ten minutes; the spec's 1,200-fetch cap that would bound this is not implemented.
+
+**Three options, estimated:**
+- **A, categories only.** `q=category:purchases` / `q=category:reservations` for +10 units, giving
+  transaction recall that system labels cannot (see the CATEGORY_PURCHASES entry below). One SOW
+  item, half a day. Does not touch the Korean brittleness.
+- **B, queries for recall and the existing classifier for precision** (recommended). Run family
+  queries first, hand `classifyMessage` a per-family `Set<messageId>` as a hint, keep listing and
+  fetching everything. +30-50 units, no change to fetch volume, so the sender list, the real
+  message counts and the excluded bucket all survive and the UI keeps its meaning. Purely additive:
+  turn the queries off and it is today's code. Three or four SOW items, one to two days.
+- **C, the spec's architecture.** Catalog probes, priority-ordered family fetches, the 1,200 cap,
+  partial-scan labelling. ~5,300 units instead of 16,230. But it drops services whose only mail is
+  unclassified (9 services, 11 messages in the measured scan) and changes what 건수 means: Google
+  becomes "5 pieces of evidence" rather than 79 messages. More honest, different product. Six to
+  eight SOW items, three to five days.
+
+**Why B:** the measured failure is classification quality, not speed. Nobody complained about 2.7
+minutes. C cuts a cost we are not paying and bundles a product decision (drop the long tail) into
+what looks like an optimisation.
+
+**Blocked on a 30-minute measurement, not on effort.** Every option assumes Gmail's Korean `q=`
+search beats the phrase table, and that is unverified. The same assumption already failed once
+today: the headers were genuinely unused, but "unused headers cause the 23% unknown rate" was a
+guess, and fixing them moved 23.7% -> 23.3%. Before building any of this, spend one token on
+`q=subject:비밀번호`, `q=from:google.com subject:보안`, `q=category:purchases`, and a quoted Korean
+phrase, and compare the hit counts against what the current rules find. If Gmail does not clearly
+win, none of the above is worth doing.
+
 ## Catalog entries verified but unshippable (2026-07-15)
 
 Two services were researched, their deletion paths confirmed against official documentation, and
