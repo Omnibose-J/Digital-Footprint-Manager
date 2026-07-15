@@ -121,11 +121,10 @@ export async function readTable(page) {
       progress: document.getElementById("progress").textContent,
       meta: document.getElementById("meta").textContent,
       err: document.getElementById("err").textContent,
-      // # / 서비스 / 도메인 / 신뢰 / 최근 증거 / 건수 / 탈퇴. `band` carries the score and its
-      // explanation, which is what the dropped 증거 column had been restating.
+      // # / 서비스 / 도메인 / 정리 우선도 / 신뢰 / 마지막 흔적 / 건수 / 탈퇴
       services: [...document.getElementById("rows").children].map((tr) => {
         const c = cells(tr);
-        return { name: c[1], domain: c[2], band: c[3], month: c[4], count: c[5], action: c[6] };
+        return { name: c[1], domain: c[2], priority: c[3], band: c[4], month: c[5], count: c[6], action: c[7] };
       }),
       excluded: [...document.getElementById("hiddenRows").children].map((tr) => {
         const c = cells(tr);

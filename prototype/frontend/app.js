@@ -2,7 +2,7 @@ import { collectSenders, scanFraction } from "./scan.js";
 import { createAggregator } from "./filter.js";
 import { loadCatalog, upgradeSnapshot, isStale } from "./catalog.js";
 import { renderGuideHtml, renderRequestTemplate, maskAccount } from "./guide.js";
-import { applyUserVerdict } from "./verdict.js";
+import { applyUserVerdict, sortBuckets } from "./verdict.js";
 import { escapeHtml } from "./html.js";
 import { initAnalytics, track } from "./analytics.js";
 
@@ -100,16 +100,44 @@ function bandCell(s) {
   return `<span class="band band-${escapeHtml(band)}">${escapeHtml(BAND_LABEL[band] || band)} ${escapeHtml(String(score))}</span><span class="score-why">${escapeHtml(expl)}</span>`;
 }
 
+const CLEANUP_LABEL = {
+  recommended: "정리 권장",
+  review: "검토",
+  keep_or_watch: "보류",
+};
+
+/**
+ * The answer to "what first", which is a different question from 신뢰 and routinely points the
+ * other way: the account we are surest about is often the one being used every day.
+ *
+ * §4 scopes this to high-band rows, so a candidate we are not sure exists shows a dash instead of
+ * a rank. Ordering "delete this first" above something that might not be an account would invert
+ * the product, because the user works down the list.
+ */
+function cleanupCell(s) {
+  if (s.cleanupScore === null || s.cleanupScore === undefined) {
+    return `<span class="cell-none" title="신뢰 '높음' 후보만 우선도를 계산합니다">—</span>`;
+  }
+  const band = s.cleanupBand || "keep_or_watch";
+  const inUse = s.inUse ? `<span class="badge-inuse">최근 사용 흔적</span>` : "";
+  const label = escapeHtml(CLEANUP_LABEL[band] || band);
+  return `<span class="pri pri-${escapeHtml(band)}">${label} ${escapeHtml(String(s.cleanupScore))}</span>${inUse}<span class="score-why">${escapeHtml(s.cleanupWhy || "")}</span>`;
+}
+
 function withCatalog(rawSnapshot) {
+  // Order is forced: verdict moves buckets and clears hiddenRule, the catalog pass reads hiddenRule
+  // to decide the link and only then can score cleanup, and the sort ranks by that score. Sorting
+  // any earlier ranks by a field that does not exist yet.
   const overridden = applyUserVerdict(rawSnapshot, userVerdict);
   if (!catalog) return overridden;
-  return upgradeSnapshot(overridden, catalog);
+  return sortBuckets(upgradeSnapshot(overridden, catalog));
 }
 
 function rowHtml(s, i) {
   return `<td>${i + 1}</td>
       <td class="cell-service">${serviceCell(s)}</td>
       <td class="cell-domain">${escapeHtml(s.registrableDomain || "")}</td>
+      <td>${cleanupCell(s)}</td>
       <td>${bandCell(s)}</td>
       <td class="cell-month">${escapeHtml(s.lastSeenMonth || "—")}</td>
       <td class="col-count">${s.messageCount}</td>

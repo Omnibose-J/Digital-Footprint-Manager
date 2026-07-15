@@ -10,8 +10,23 @@
  * that list, not before.
  */
 
-/** Score desc, then messageCount desc — single shared comparator (SOW 005 R9). */
+/**
+ * Cleanup priority first, then discovery confidence (SOW 005 R9: one shared comparator).
+ *
+ * The product is a cleanup tool, so the top of the list has to answer "what do I deal with first",
+ * not "which of these is most certainly mine". Sorted by confidence alone the top was GitHub and
+ * Google: the accounts the user opens every day, ranked highest precisely because they are the most
+ * certainly theirs. That is the wrong end of the list to start from.
+ *
+ * Unscored rows (§4 computes cleanup only for high-band, never for likely_closed) fall below the
+ * scored ones and keep their old confidence ordering among themselves. They are not "low priority",
+ * they are "we are not confident enough to rank this", which is a different sentence, and the cell
+ * says so with a dash rather than a number.
+ */
 function compareByScoreThenCount(a, b) {
+  const pa = typeof a.cleanupScore === "number" ? a.cleanupScore : -1;
+  const pb = typeof b.cleanupScore === "number" ? b.cleanupScore : -1;
+  if (pb !== pa) return pb - pa;
   const sa = a.discoveryScore || 0;
   const sb = b.discoveryScore || 0;
   if (sb !== sa) return sb - sa;
@@ -22,7 +37,15 @@ function compareByCount(a, b) {
   return b.messageCount - a.messageCount;
 }
 
-function sortBuckets(snapshot) {
+/**
+ * Exported because the order cannot be decided here any more.
+ *
+ * cleanupScore is added by the catalog pass, which has to run after this file moves rows between
+ * buckets (upgradeCandidate reads hiddenRule to decide the link, and restoring is what clears it).
+ * So the pipeline is: move buckets, apply the catalog and score, then sort. Sorting here as well
+ * would rank by a field that does not exist yet.
+ */
+export function sortBuckets(snapshot) {
   return {
     ...snapshot,
     services: [...(snapshot.services || [])].sort(compareByScoreThenCount),

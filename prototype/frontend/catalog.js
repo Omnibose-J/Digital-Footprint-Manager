@@ -1,6 +1,7 @@
 /** Catalog load, domain match, and verified-link upgrade. Browser ESM; no bundler. */
 
 import { linkFields } from "./filter.js";
+import { computeCleanupScore } from "./cleanup.js";
 
 const VALID_ROUTES = new Set([
   "self_service",
@@ -74,27 +75,34 @@ export function isStale(entry, today = new Date()) {
  * @param {any} candidate
  * @param {{ services?: any[] } | null | undefined} catalog
  */
-export function upgradeCandidate(candidate, catalog) {
+export function upgradeCandidate(candidate, catalog, now = new Date()) {
   if (!candidate) return candidate;
-  if (candidate.linkBlockedBy) return { ...candidate, catalogEntry: null };
 
-  const entry = matchService(candidate.registrableDomain, catalog);
-  if (!entry) return { ...candidate, catalogEntry: null };
+  // The cleanup score reads category and route, so it can only run after the catalog is applied.
+  // Blocked links get one too: an uncatalogued row still has dormancy and payment evidence, and
+  // withholding the score because we lack a link would rank it by our coverage, not by their data.
+  const withEntry = candidate.linkBlockedBy
+    ? { ...candidate, catalogEntry: null }
+    : (() => {
+        const entry = matchService(candidate.registrableDomain, catalog);
+        if (!entry) return { ...candidate, catalogEntry: null };
+        const links = linkFields(candidate.registrableDomain, candidate.hiddenRule, entry);
+        return {
+          ...candidate,
+          siteUrl: links.siteUrl,
+          linkSafety: links.linkSafety,
+          linkBlockedBy: links.linkBlockedBy,
+          serviceId: entry.service_id,
+          catalogEntry: entry,
+        };
+      })();
 
-  const links = linkFields(candidate.registrableDomain, candidate.hiddenRule, entry);
-  return {
-    ...candidate,
-    siteUrl: links.siteUrl,
-    linkSafety: links.linkSafety,
-    linkBlockedBy: links.linkBlockedBy,
-    serviceId: entry.service_id,
-    catalogEntry: entry,
-  };
+  return { ...withEntry, ...computeCleanupScore(withEntry, now) };
 }
 
-export function upgradeSnapshot(snapshot, catalog) {
+export function upgradeSnapshot(snapshot, catalog, now = new Date()) {
   if (!snapshot) return snapshot;
-  const map = (list) => (list || []).map((c) => upgradeCandidate(c, catalog));
+  const map = (list) => (list || []).map((c) => upgradeCandidate(c, catalog, now));
   return {
     ...snapshot,
     services: map(snapshot.services),

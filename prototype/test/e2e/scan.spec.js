@@ -178,6 +178,40 @@ test.describe("the scan a user actually sees", () => {
     await expect(modal).toBeHidden();
   });
 
+  test("the list leads with what to clean up, not with what we are surest about", async ({ page }) => {
+    // The whole point of the reorder. Spotify (2024, dormant) and GitHub (2025, recent) are both
+    // high-band, and confidence alone put GitHub near the top: the account being used every day.
+    const view = await runScan(page);
+    const ranked = view.services.filter((s) => !s.priority.startsWith("—"));
+    expect(ranked.length).toBeGreaterThan(0);
+
+    const scoreOf = (s) => Number(/\d+/.exec(s.priority)?.[0] ?? -1);
+    for (let i = 1; i < ranked.length; i++) {
+      expect(scoreOf(ranked[i - 1])).toBeGreaterThanOrEqual(scoreOf(ranked[i]));
+    }
+    // Unranked rows sink below every ranked one instead of mixing in.
+    const firstUnranked = view.services.findIndex((s) => s.priority.startsWith("—"));
+    if (firstUnranked !== -1) {
+      expect(view.services.slice(firstUnranked).every((s) => s.priority.startsWith("—"))).toBe(true);
+    }
+  });
+
+  test("a row we are not sure about shows a dash, not a rank of zero", async ({ page }) => {
+    // "Not ranked" and "ranked last" are different sentences. §4 scores only high-band.
+    const view = await runScan(page);
+    const unsure = view.services.find((s) => !s.band.startsWith("높음"));
+    expect(unsure).toBeTruthy();
+    expect(unsure.priority).toContain("—");
+  });
+
+  test("an account with recent traces is never recommended, however sure we are of it", async ({ page }) => {
+    // GitHub is the highest-confidence row in this mailbox and the one most obviously in use.
+    const view = await runScan(page);
+    const gh = view.services.find((s) => s.domain === "github.com");
+    expect(gh.band).toContain("높음");
+    expect(gh.priority).not.toContain("정리 권장");
+  });
+
   test("the layout does not jump sideways when the scrollbar arrives", async ({ page }) => {
     // Rows stream in during a scan. The moment the page outgrows the viewport the vertical bar
     // appears, and without a reserved gutter it shoves everything left by its own width.
