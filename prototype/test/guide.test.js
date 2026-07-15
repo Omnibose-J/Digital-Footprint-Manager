@@ -123,3 +123,65 @@ describe("guide modal render states (R4)", () => {
     assert.match(html, /2025-01-01/);
   });
 });
+
+describe("identity_verification reaches the screen", () => {
+  const candidate = {
+    displayName: "토스",
+    registrableDomain: "toss.im",
+    linkSafety: "verified",
+  };
+
+  it("renders what the user must prove, from the catalog entry", () => {
+    const html = renderGuideHtml({
+      candidate,
+      entry: {
+        deletion_route: "self_service",
+        url: "https://support.toss.im/faq/218",
+        steps: ["설정 > 탈퇴하기"],
+        identity_verification: "탈퇴 마지막 단계에서 토스 비밀번호를 입력합니다.",
+        last_verified_at: "2026-07-15",
+      },
+      stale: false,
+      serviceName: "토스",
+      maskedAccount: "so****@gmail.com",
+    });
+    // Anchored on the heading. TEMPLATE_BODY already contains "본인확인이 필요하면...", so a
+    // bare /본인확인/ matches whether or not this section renders and proves nothing.
+    assert.match(html, /<h3>본인확인<\/h3>/);
+    assert.match(html, /토스 비밀번호를 입력합니다/);
+  });
+
+  it("an entry without the field renders no empty 본인확인 section", () => {
+    const html = renderGuideHtml({
+      candidate,
+      entry: {
+        deletion_route: "self_service",
+        url: "https://example.com/close",
+        steps: ["설정 > 탈퇴"],
+        last_verified_at: "2026-07-15",
+      },
+      stale: false,
+      serviceName: "예시",
+      maskedAccount: "so****@gmail.com",
+    });
+    assert.doesNotMatch(html, /<h3>본인확인<\/h3>/);
+  });
+
+  it("is escaped, not injected", () => {
+    const html = renderGuideHtml({
+      candidate,
+      entry: {
+        deletion_route: "self_service",
+        url: "https://example.com/close",
+        steps: [],
+        identity_verification: "<img src=x onerror=alert(1)>",
+        last_verified_at: "2026-07-15",
+      },
+      stale: false,
+      serviceName: "예시",
+      maskedAccount: "so****@gmail.com",
+    });
+    assert.doesNotMatch(html, /<img src=x/);
+    assert.match(html, /&lt;img/);
+  });
+});

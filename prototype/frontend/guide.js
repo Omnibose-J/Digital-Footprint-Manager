@@ -149,6 +149,16 @@ export function renderGuideHtml({
   const checklist = CHECKLIST.map((c) => `<li>${escapeHtml(c)}</li>`).join("");
   const warnings = WARNINGS.map((w) => `<li>${escapeHtml(w)}</li>`).join("");
 
+  // Route-independent, so it sits outside routeBlockHtml's five branches rather than being
+  // repeated in each. The catalog has carried this field since the seed entries and nothing
+  // ever rendered it: what you must prove to close an account is worth knowing before you start.
+  const identity = entry?.identity_verification
+    ? `<section class="guide-section">
+      <h3>본인확인</h3>
+      <p>${escapeHtml(entry.identity_verification)}</p>
+    </section>`
+    : "";
+
   const staleNote =
     stale && entry
       ? `<p class="guide-stale-note">이 안내의 검토 기한이 지났습니다 (last_verified_at: ${verifiedAt}). 링크는 보여 드리지만 최신으로 단정하지 마세요.</p>`
@@ -161,6 +171,7 @@ export function renderGuideHtml({
       ${staleNote}
     </div>
     ${routeBlockHtml(entry)}
+    ${identity}
     <section class="guide-section">
       <h3>탈퇴 전 체크리스트</h3>
       <ul>${checklist}</ul>
