@@ -161,7 +161,7 @@
 prototype/
   frontend/    브라우저에서 도는 전부 (스캔, 분류, 점수, 화면)
   backend/     로그인과 설정만. 메일은 만지지 않음
-  test/        유닛 111개 + e2e 15개
+  test/        유닛 118개 + e2e 15개
 docs/tracking/findings.md   알고 있지만 아직 안 고친 것들
 PRODUCT_SPEC.md             제품 계약서. §8에 결정 기록
 ```
