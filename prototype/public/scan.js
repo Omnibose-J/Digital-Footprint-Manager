@@ -1,32 +1,4 @@
-/** Browser-side Gmail From aggregation. Access token never leaves the browser. */
-
-export function parseFromHeader(raw = "") {
-  const text = String(raw).trim();
-  if (!text) return null;
-
-  const angle = text.match(/^(.*)<([^>]+)>\s*$/);
-  if (angle) {
-    const name = angle[1].replace(/^"|"$/g, "").trim();
-    const email = angle[2].trim().toLowerCase();
-    return { name: name || email, email, raw: text };
-  }
-
-  const emailOnly = text.match(/[\w.+-]+@[\w.-]+\.\w+/);
-  if (emailOnly) {
-    const email = emailOnly[0].toLowerCase();
-    return { name: email, email, raw: text };
-  }
-
-  return { name: text, email: text.toLowerCase(), raw: text };
-}
-
-export function domainFromEmail(email) {
-  const at = String(email).lastIndexOf("@");
-  if (at < 0) return null;
-  return String(email)
-    .slice(at + 1)
-    .toLowerCase();
-}
+/** Browser-side Gmail metadata collector. Access token never leaves the browser. */
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -50,15 +22,17 @@ async function mapPool(items, concurrency, worker) {
   return results;
 }
 
-function sortedSenders(byEmail) {
-  return [...byEmail.values()].sort((a, b) => b.count - a.count);
-}
-
 async function gmailFetch(accessToken, path, params) {
   const url = new URL(`https://gmail.googleapis.com/gmail/v1/${path}`);
   if (params) {
     for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
+      if (v === undefined || v === null || v === "") continue;
+      // Gmail treats metadataHeaders as a repeated query param, not CSV.
+      if (Array.isArray(v)) {
+        for (const item of v) url.searchParams.append(k, String(item));
+      } else {
+        url.searchParams.set(k, String(v));
+      }
     }
   }
   const res = await fetch(url, {
@@ -76,19 +50,46 @@ async function gmailFetch(accessToken, path, params) {
   return res.json();
 }
 
+function headerMap(headers) {
+  const out = {
+    from: undefined,
+    subject: undefined,
+    listUnsubscribe: undefined,
+    listUnsubscribePost: undefined,
+    listId: undefined,
+    precedence: undefined,
+    autoSubmitted: undefined,
+    authenticationResults: undefined,
+  };
+  const byName = {
+    from: "from",
+    subject: "subject",
+    "list-unsubscribe": "listUnsubscribe",
+    "list-unsubscribe-post": "listUnsubscribePost",
+    "list-id": "listId",
+    precedence: "precedence",
+    "auto-submitted": "autoSubmitted",
+    "authentication-results": "authenticationResults",
+  };
+  for (const h of headers || []) {
+    const key = byName[String(h.name || "").toLowerCase()];
+    if (key && out[key] === undefined) out[key] = h.value;
+  }
+  return out;
+}
+
 /**
  * Full-mailbox (or capped) scan in the browser.
- * onProgress({ phase, unlimited, target, scannedIds, fetched, errors, uniqueSenders, senders })
+ * Pure collector — aggregation lives in filter.js (wired by app.js).
+ * onProgress({ phase, unlimited, target, scannedIds, fetched, errors, account })
+ * onMessage({ id, internalDate, labelIds, headers })
  */
-export async function collectSenders(accessToken, {
-  maxMessages = 0,
-  concurrency = 12,
-  onProgress,
-  signal,
-} = {}) {
+export async function collectSenders(
+  accessToken,
+  { maxMessages = 0, concurrency = 12, onProgress, onMessage, signal } = {}
+) {
   const unlimited = !(Number(maxMessages) > 0);
   const cap = unlimited ? Number.POSITIVE_INFINITY : Number(maxMessages);
-  const byEmail = new Map();
   let listed = 0;
   let fetched = 0;
   let errors = 0;
@@ -109,8 +110,6 @@ export async function collectSenders(accessToken, {
       scannedIds: listed,
       fetched,
       errors,
-      uniqueSenders: byEmail.size,
-      senders: sortedSenders(byEmail),
       account: profile.emailAddress || null,
     });
   };
@@ -145,32 +144,26 @@ export async function collectSenders(accessToken, {
       let attempt = 0;
       while (attempt < 4) {
         try {
-          const msg = await gmailFetch(
-            accessToken,
-            `users/me/messages/${id}`,
-            {
-              format: "metadata",
-              metadataHeaders: "From",
-              fields: "payload/headers",
-            }
-          );
-          const headers = msg.payload?.headers || [];
-          const fromHeader = headers.find((h) => h.name?.toLowerCase() === "from");
-          const parsed = parseFromHeader(fromHeader?.value);
-          if (parsed) {
-            const prev = byEmail.get(parsed.email);
-            if (prev) {
-              prev.count += 1;
-              if (parsed.name && parsed.name !== parsed.email) prev.name = parsed.name;
-            } else {
-              byEmail.set(parsed.email, {
-                email: parsed.email,
-                name: parsed.name,
-                count: 1,
-                domain: domainFromEmail(parsed.email),
-              });
-            }
-          }
+          const msg = await gmailFetch(accessToken, `users/me/messages/${id}`, {
+            format: "metadata",
+            metadataHeaders: [
+              "From",
+              "Subject",
+              "List-Unsubscribe",
+              "List-Unsubscribe-Post",
+              "List-Id",
+              "Precedence",
+              "Auto-Submitted",
+              "Authentication-Results",
+            ],
+            fields: "labelIds,internalDate,payload/headers",
+          });
+          onMessage?.({
+            id,
+            internalDate: msg.internalDate,
+            labelIds: Array.isArray(msg.labelIds) ? msg.labelIds : [],
+            headers: headerMap(msg.payload?.headers),
+          });
           fetched += 1;
           report("fetching");
           return;
@@ -192,7 +185,6 @@ export async function collectSenders(accessToken, {
     if (!pageToken) break;
   }
 
-  const senders = sortedSenders(byEmail);
   report("fetching", true);
 
   return {
@@ -200,9 +192,7 @@ export async function collectSenders(accessToken, {
     scannedIds: listed,
     fetched,
     errors,
-    uniqueSenders: senders.length,
     unlimited,
     estimatedTotal,
-    senders,
   };
 }

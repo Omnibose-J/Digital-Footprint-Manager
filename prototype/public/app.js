@@ -1,4 +1,5 @@
-import { collectSenders, domainFromEmail } from "./scan.js";
+import { collectSenders } from "./scan.js";
+import { createAggregator } from "./filter.js";
 
 const loginPanel = document.getElementById("loginPanel");
 const appPanel = document.getElementById("appPanel");
@@ -9,14 +10,39 @@ const progressEl = document.getElementById("progress");
 const meta = document.getElementById("meta");
 const err = document.getElementById("err");
 const rows = document.getElementById("rows");
+const hiddenToggle = document.getElementById("hiddenToggle");
+const hiddenBody = document.getElementById("hiddenBody");
+const hiddenRows = document.getElementById("hiddenRows");
+const linkNote = document.getElementById("linkNote");
 const scanBtn = document.getElementById("scan");
 const saveBtn = document.getElementById("save");
 const logoutBtn = document.getElementById("logout");
 
+const FAMILY_LABEL = {
+  signup: "가입",
+  auth: "인증",
+  transaction: "거래",
+  notification: "알림",
+  marketing: "마케팅",
+  closure: "탈퇴",
+  unknown: "미분류",
+};
+
+const RULE_LABEL = {
+  self: "본인 주소",
+  invalid_domain: "유효하지 않은 도메인",
+  relay_domain: "메일 중계 도메인",
+  personal_mailbox: "개인 메일함",
+};
+
 let config = null;
-let lastSenders = [];
+/** @type {{ services: any[], hidden: any[], unresolved: any[], stats: any } | null} */
+let lastSnapshot = null;
+/** Keys the user restored. Held outside the aggregator so each progress tick re-applies them. */
+const restoredKeys = new Set();
 let abortScan = null;
 let gmailAccessToken = null;
+let hiddenOpen = false;
 
 function escapeHtml(s) {
   return String(s)
@@ -26,18 +52,99 @@ function escapeHtml(s) {
     .replaceAll('"', "&quot;");
 }
 
-function renderSenders(senders) {
-  lastSenders = senders || [];
-  rows.innerHTML = lastSenders
-    .map(
-      (s, i) =>
-        `<tr><td>${i + 1}</td><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.email)}</td><td>${s.count}</td></tr>`
-    )
-    .join("");
-  saveBtn.disabled = lastSenders.length === 0;
+function evidenceBadges(families) {
+  const order = ["signup", "auth", "transaction", "notification", "closure", "marketing", "unknown"];
+  const parts = [];
+  for (const f of order) {
+    if ((families?.[f]?.count || 0) > 0) {
+      parts.push(`<span class="badge">${escapeHtml(FAMILY_LABEL[f] || f)}</span>`);
+    }
+  }
+  return parts.join(" · ") || "—";
 }
 
-function formatProgress(p) {
+function serviceCell(s) {
+  const name = escapeHtml(s.displayName || s.registrableDomain || "");
+  if (s.siteUrl) {
+    return `<a href="${escapeHtml(s.siteUrl)}" target="_blank" rel="noopener noreferrer">${name}</a>`;
+  }
+  return name;
+}
+
+/**
+ * Move user-restored entries out of the excluded buckets. Runs on every render because
+ * each progress tick hands us a fresh snapshot that knows nothing about restores.
+ * Link fields are left untouched: restoring says "this is a service", not "this URL is right".
+ */
+function applyRestores(snapshot) {
+  if (!snapshot || restoredKeys.size === 0) return snapshot;
+  const services = [...snapshot.services];
+  const withoutRestored = (bucket) =>
+    bucket.filter((s) => {
+      if (!restoredKeys.has(s.key)) return true;
+      services.push({ ...s, verdict: "candidate", hiddenRule: null });
+      return false;
+    });
+
+  const hidden = withoutRestored(snapshot.hidden);
+  const unresolved = withoutRestored(snapshot.unresolved);
+  services.sort((a, b) => b.messageCount - a.messageCount);
+
+  return {
+    services,
+    hidden,
+    unresolved,
+    stats: {
+      ...snapshot.stats,
+      services: services.length,
+      hidden: hidden.length,
+      unresolved: unresolved.length,
+    },
+  };
+}
+
+function renderSnapshot(rawSnapshot) {
+  const snapshot = applyRestores(rawSnapshot);
+  lastSnapshot = snapshot;
+  const services = snapshot?.services || [];
+  const excluded = [...(snapshot?.hidden || []), ...(snapshot?.unresolved || [])];
+
+  rows.innerHTML = services
+    .map(
+      (s, i) =>
+        `<tr>
+          <td>${i + 1}</td>
+          <td>${serviceCell(s)}</td>
+          <td>${escapeHtml(s.registrableDomain || "")}</td>
+          <td>${evidenceBadges(s.families)}</td>
+          <td>${escapeHtml(s.lastSeenMonth || "—")}</td>
+          <td>${s.messageCount}</td>
+        </tr>`
+    )
+    .join("");
+
+  const hasInferred = services.some((s) => s.linkSafety === "inferred");
+  linkNote.classList.toggle("hidden", !hasInferred);
+
+  hiddenToggle.textContent = `제외된 발신자 ${excluded.length}개 보기`;
+  hiddenRows.innerHTML = excluded
+    .map((s, i) => {
+      const reason = RULE_LABEL[s.hiddenRule] || s.hiddenRule || "—";
+      return `<tr>
+          <td>${i + 1}</td>
+          <td>${escapeHtml(s.displayName || s.registrableDomain || "")}</td>
+          <td>${escapeHtml(s.registrableDomain || "")}</td>
+          <td>${escapeHtml(reason)}</td>
+          <td>${s.messageCount}</td>
+          <td><button type="button" class="restore-btn" data-restore="${i}">복구</button></td>
+        </tr>`;
+    })
+    .join("");
+
+  saveBtn.disabled = services.length === 0;
+}
+
+function formatProgress(p, stats) {
   const totalLabel = p.target ? String(p.target) : "?";
   if (p.phase === "listing") {
     return `메일 ID 수집 중… ${p.scannedIds}${p.unlimited ? ` (전체 ~${totalLabel})` : ` / ${totalLabel}`}`;
@@ -45,7 +152,7 @@ function formatProgress(p) {
   return [
     `헤더 조회 중… ${p.fetched} / ${p.scannedIds || totalLabel}`,
     p.unlimited && p.target ? `전체 예상 ${p.target}` : null,
-    `고유 발신자 ${p.uniqueSenders}`,
+    stats ? `후보 ${stats.services} · 제외 ${stats.hidden + stats.unresolved}` : null,
     p.errors ? `에러 ${p.errors}` : null,
   ]
     .filter(Boolean)
@@ -66,9 +173,14 @@ function setLoggedOutUI() {
   progressEl.textContent = "";
   meta.textContent = "";
   rows.innerHTML = "";
-  lastSenders = [];
+  hiddenRows.innerHTML = "";
+  lastSnapshot = null;
   gmailAccessToken = null;
   saveBtn.disabled = true;
+  linkNote.classList.add("hidden");
+  hiddenBody.classList.add("hidden");
+  hiddenOpen = false;
+  hiddenToggle.textContent = "제외된 발신자 0개 보기";
 }
 
 async function refreshMe() {
@@ -151,13 +263,33 @@ function requestGmailToken() {
   });
 }
 
+hiddenToggle.addEventListener("click", () => {
+  hiddenOpen = !hiddenOpen;
+  hiddenBody.classList.toggle("hidden", !hiddenOpen);
+});
+
+hiddenRows.addEventListener("click", (ev) => {
+  const btn = ev.target.closest("[data-restore]");
+  if (!btn || !lastSnapshot) return;
+  const idx = Number(btn.getAttribute("data-restore"));
+  const item = [...lastSnapshot.hidden, ...lastSnapshot.unresolved][idx];
+  if (!item) return;
+
+  restoredKeys.add(item.key);
+  renderSnapshot(lastSnapshot);
+});
+
 scanBtn.addEventListener("click", async () => {
   err.textContent = "";
   meta.textContent = "";
   progressEl.textContent = "Gmail 권한 요청 중…";
   rows.innerHTML = "";
+  hiddenRows.innerHTML = "";
+  lastSnapshot = null;
+  restoredKeys.clear();
   scanBtn.disabled = true;
   saveBtn.disabled = true;
+  linkNote.classList.add("hidden");
 
   if (abortScan) abortScan.abort();
   abortScan = new AbortController();
@@ -166,15 +298,40 @@ scanBtn.addEventListener("click", async () => {
     gmailAccessToken = await requestGmailToken();
     progressEl.textContent = "스캔 시작…";
 
+    // Prefer Gmail profile email for self-exclusion; fall back to app session.
+    let aggregator = null;
+    const meData = await fetch("/api/me").then((r) => r.json());
+    aggregator = createAggregator({ selfEmail: meData.email || "" });
+
     const result = await collectSenders(gmailAccessToken, {
       maxMessages: config.maxMessages,
       concurrency: config.concurrency,
       signal: abortScan.signal,
+      onMessage: (message) => {
+        aggregator.add(message);
+      },
       onProgress: (p) => {
-        progressEl.textContent = formatProgress(p);
-        if (p.senders?.length) renderSenders(p.senders);
+        if (
+          p.account &&
+          meData.email &&
+          p.account.toLowerCase() !== String(meData.email).toLowerCase() &&
+          aggregator.snapshot().stats.messages === 0
+        ) {
+          aggregator = createAggregator({ selfEmail: p.account });
+        }
+        const snap = aggregator.snapshot();
+        renderSnapshot(snap);
+        progressEl.textContent = formatProgress(p, snap.stats);
       },
     });
+
+    const finalSnap = aggregator.snapshot();
+    renderSnapshot(finalSnap);
+
+    const unknownShare =
+      finalSnap.stats.messages > 0
+        ? ((finalSnap.stats.unknownFamily / finalSnap.stats.messages) * 100).toFixed(1)
+        : "0.0";
 
     progressEl.textContent = `완료: ${result.fetched} / ${result.scannedIds}${result.unlimited ? " (전체)" : ""}`;
     meta.textContent = [
@@ -182,9 +339,11 @@ scanBtn.addEventListener("click", async () => {
       `스캔 ID: ${result.scannedIds}`,
       `헤더 조회: ${result.fetched}`,
       `에러: ${result.errors}`,
-      `고유 발신자: ${result.uniqueSenders}`,
+      `후보 ${finalSnap.stats.services}`,
+      `제외 ${finalSnap.stats.hidden}`,
+      `미해결 ${finalSnap.stats.unresolved}`,
+      `unknownFamily ${finalSnap.stats.unknownFamily}/${finalSnap.stats.messages} (${unknownShare}%)`,
     ].join(" · ");
-    renderSenders(result.senders);
   } catch (e) {
     err.textContent = String(e.message || e);
   } finally {
@@ -194,16 +353,15 @@ scanBtn.addEventListener("click", async () => {
 
 saveBtn.addEventListener("click", async () => {
   err.textContent = "";
-  const domainMap = new Map();
-  for (const s of lastSenders) {
-    const domain = s.domain || domainFromEmail(s.email);
-    if (!domain) continue;
-    domainMap.set(domain, (domainMap.get(domain) || 0) + s.count);
+  const services = lastSnapshot?.services || [];
+  // Fold by domain: free-mailbox rescues are per-address, so two candidates can share
+  // one registrable domain. The server keeps the first and drops the rest, not the sum.
+  const byDomain = new Map();
+  for (const s of services) {
+    if (!s.registrableDomain) continue;
+    byDomain.set(s.registrableDomain, (byDomain.get(s.registrableDomain) || 0) + s.messageCount);
   }
-  const domains = [...domainMap.entries()].map(([domain, count]) => ({
-    domain,
-    count,
-  }));
+  const domains = [...byDomain].map(([domain, count]) => ({ domain, count }));
 
   try {
     const res = await fetch("/api/candidates", {
