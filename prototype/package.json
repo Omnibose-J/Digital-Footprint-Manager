@@ -1,17 +1,15 @@
 {
   "name": "dfm-gmail-sender-prototype",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "auth": "node src/auth-setup.js",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "googleapis": "^144.0.0",
-    "open": "^10.1.0"
+    "google-auth-library": "^9.15.1"
   }
 }

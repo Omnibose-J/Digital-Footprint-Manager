@@ -1,35 +1,5 @@
-import { google } from "googleapis";
+/** Browser-side Gmail From aggregation. Access token never leaves the browser. */
 
-const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
-
-export function createOAuthClient() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri =
-    process.env.GOOGLE_REDIRECT_URI || "http://localhost:3456/oauth2callback";
-
-  if (!clientId || !clientSecret) {
-    throw new Error("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required in .env");
-  }
-
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
-}
-
-export function getAuthUrl(oauth2Client, { loginHint } = {}) {
-  const opts = {
-    access_type: "offline",
-    prompt: "consent",
-    scope: SCOPES,
-  };
-  if (loginHint) opts.login_hint = String(loginHint).trim();
-  return oauth2Client.generateAuthUrl(opts);
-}
-
-export function getGmailClient(oauth2Client) {
-  return google.gmail({ version: "v1", auth: oauth2Client });
-}
-
-/** Parse "Name <email@domain>" / bare email into { name, email, raw } */
 export function parseFromHeader(raw = "") {
   const text = String(raw).trim();
   if (!text) return null;
@@ -48,6 +18,14 @@ export function parseFromHeader(raw = "") {
   }
 
   return { name: text, email: text.toLowerCase(), raw: text };
+}
+
+export function domainFromEmail(email) {
+  const at = String(email).lastIndexOf("@");
+  if (at < 0) return null;
+  return String(email)
+    .slice(at + 1)
+    .toLowerCase();
 }
 
 function sleep(ms) {
@@ -72,29 +50,42 @@ async function mapPool(items, concurrency, worker) {
   return results;
 }
 
-function isRateLimited(err) {
-  const status = err?.code || err?.response?.status;
-  return status === 429 || status === 403;
-}
-
 function sortedSenders(byEmail) {
   return [...byEmail.values()].sort((a, b) => b.count - a.count);
 }
 
+async function gmailFetch(accessToken, path, params) {
+  const url = new URL(`https://gmail.googleapis.com/gmail/v1/${path}`);
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
+    }
+  }
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (res.status === 429 || res.status === 403) {
+    const err = new Error(`Gmail rate/auth error ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Gmail ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
 /**
- * Scan mailbox (optionally capped), aggregate From headers.
- * maxMessages <= 0 means no cap (entire mailbox).
- * Processes list pages → fetch immediately so the UI can update live.
+ * Full-mailbox (or capped) scan in the browser.
+ * onProgress({ phase, unlimited, target, scannedIds, fetched, errors, uniqueSenders, senders })
  */
-export async function collectSenders(
-  gmail,
-  {
-    maxMessages = 0,
-    concurrency = 12,
-    estimatedTotal = 0,
-    onProgress,
-  } = {}
-) {
+export async function collectSenders(accessToken, {
+  maxMessages = 0,
+  concurrency = 12,
+  onProgress,
+  signal,
+} = {}) {
   const unlimited = !(Number(maxMessages) > 0);
   const cap = unlimited ? Number.POSITIVE_INFINITY : Number(maxMessages);
   const byEmail = new Map();
@@ -104,38 +95,41 @@ export async function collectSenders(
   let pageToken;
   let lastReportAt = 0;
 
-  const report = (phase, force = false, extra = {}) => {
+  const profile = await gmailFetch(accessToken, "users/me/profile");
+  const estimatedTotal = Number(profile.messagesTotal || 0);
+
+  const report = (phase, force = false) => {
     const now = Date.now();
     if (!force && now - lastReportAt < 120) return;
     lastReportAt = now;
-    if (typeof onProgress !== "function") return;
-    onProgress({
+    onProgress?.({
       phase,
       unlimited,
-      target: estimatedTotal || (unlimited ? listed : Math.min(cap, listed || cap)),
+      target: estimatedTotal || listed,
       scannedIds: listed,
       fetched,
       errors,
       uniqueSenders: byEmail.size,
       senders: sortedSenders(byEmail),
-      ...extra,
+      account: profile.emailAddress || null,
     });
   };
 
   report("listing", true);
 
   while (listed < cap) {
+    if (signal?.aborted) throw new Error("스캔이 취소되었습니다.");
+
     const pageSize = Math.min(500, unlimited ? 500 : cap - listed);
     if (pageSize <= 0) break;
 
-    const listRes = await gmail.users.messages.list({
-      userId: "me",
+    const listRes = await gmailFetch(accessToken, "users/me/messages", {
       maxResults: pageSize,
       pageToken,
       fields: "messages/id,nextPageToken",
     });
 
-    const batch = listRes.data.messages || [];
+    const batch = listRes.messages || [];
     if (batch.length === 0) break;
 
     const pageIds = [];
@@ -144,36 +138,36 @@ export async function collectSenders(
       pageIds.push(m.id);
     }
     listed += pageIds.length;
-
     report("listing", true);
 
     await mapPool(pageIds, concurrency, async (id) => {
+      if (signal?.aborted) return;
       let attempt = 0;
       while (attempt < 4) {
         try {
-          const res = await gmail.users.messages.get({
-            userId: "me",
-            id,
-            format: "metadata",
-            metadataHeaders: ["From"],
-            fields: "payload/headers",
-          });
-
-          const headers = res.data.payload?.headers || [];
+          const msg = await gmailFetch(
+            accessToken,
+            `users/me/messages/${id}`,
+            {
+              format: "metadata",
+              metadataHeaders: "From",
+              fields: "payload/headers",
+            }
+          );
+          const headers = msg.payload?.headers || [];
           const fromHeader = headers.find((h) => h.name?.toLowerCase() === "from");
           const parsed = parseFromHeader(fromHeader?.value);
           if (parsed) {
             const prev = byEmail.get(parsed.email);
             if (prev) {
               prev.count += 1;
-              if (parsed.name && parsed.name !== parsed.email) {
-                prev.name = parsed.name;
-              }
+              if (parsed.name && parsed.name !== parsed.email) prev.name = parsed.name;
             } else {
               byEmail.set(parsed.email, {
                 email: parsed.email,
                 name: parsed.name,
                 count: 1,
+                domain: domainFromEmail(parsed.email),
               });
             }
           }
@@ -182,7 +176,7 @@ export async function collectSenders(
           return;
         } catch (err) {
           attempt += 1;
-          if (isRateLimited(err) && attempt < 4) {
+          if ((err.status === 429 || err.status === 403) && attempt < 4) {
             await sleep(300 * attempt);
             continue;
           }
@@ -194,8 +188,7 @@ export async function collectSenders(
     });
 
     report("fetching", true);
-
-    pageToken = listRes.data.nextPageToken;
+    pageToken = listRes.nextPageToken;
     if (!pageToken) break;
   }
 
@@ -203,11 +196,13 @@ export async function collectSenders(
   report("fetching", true);
 
   return {
+    account: profile.emailAddress || null,
     scannedIds: listed,
     fetched,
     errors,
     uniqueSenders: senders.length,
     unlimited,
+    estimatedTotal,
     senders,
   };
 }

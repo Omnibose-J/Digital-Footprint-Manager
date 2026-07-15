@@ -1,38 +1,40 @@
-const emailInput = document.getElementById("email");
-const connectBtn = document.getElementById("connect");
-const logoutBtn = document.getElementById("logout");
-const loadBtn = document.getElementById("load");
+import { collectSenders, domainFromEmail } from "./scan.js";
+
+const loginPanel = document.getElementById("loginPanel");
+const appPanel = document.getElementById("appPanel");
+const googleBtn = document.getElementById("googleBtn");
+const loginStatus = document.getElementById("loginStatus");
 const statusEl = document.getElementById("status");
 const progressEl = document.getElementById("progress");
 const meta = document.getElementById("meta");
 const err = document.getElementById("err");
 const rows = document.getElementById("rows");
+const scanBtn = document.getElementById("scan");
+const saveBtn = document.getElementById("save");
+const logoutBtn = document.getElementById("logout");
 
-let activeStream = null;
+let config = null;
+let lastSenders = [];
+let abortScan = null;
+let gmailAccessToken = null;
 
-const params = new URLSearchParams(location.search);
-if (params.get("connected") === "1") {
-  if (params.get("mismatch") === "1") {
-    err.textContent =
-      "입력한 이메일과 Google에서 선택한 계정이 다릅니다. 연결은 됐으니 원하면 다시 연결하세요.";
-  }
-  history.replaceState({}, "", "/");
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
-async function refreshMe() {
-  const res = await fetch("/api/me");
-  const data = await res.json();
-  if (data.connected) {
-    statusEl.textContent = `연결됨: ${data.account || "(확인 중)"}`;
-    if (data.hintEmail && !emailInput.value) {
-      emailInput.value = data.hintEmail;
-    } else if (data.account && !emailInput.value) {
-      emailInput.value = data.account;
-    }
-  } else {
-    statusEl.textContent = "아직 연결되지 않음 — 이메일을 입력하고 Google 연결을 누르세요.";
-  }
-  return data;
+function renderSenders(senders) {
+  lastSenders = senders || [];
+  rows.innerHTML = lastSenders
+    .map(
+      (s, i) =>
+        `<tr><td>${i + 1}</td><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.email)}</td><td>${s.count}</td></tr>`
+    )
+    .join("");
+  saveBtn.disabled = lastSenders.length === 0;
 }
 
 function formatProgress(p) {
@@ -50,135 +52,199 @@ function formatProgress(p) {
     .join(" · ");
 }
 
-function renderSenders(senders) {
-  rows.innerHTML = (senders || [])
-    .map(
-      (s, i) =>
-        `<tr><td>${i + 1}</td><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.email)}</td><td>${s.count}</td></tr>`
-    )
-    .join("");
+function setLoggedInUI(me) {
+  loginPanel.classList.add("hidden");
+  appPanel.classList.remove("hidden");
+  statusEl.textContent = `로그인됨: ${me.name || me.email} (${me.email})`;
+  loginStatus.textContent = "";
 }
 
-function renderDone(data) {
-  progressEl.textContent = `완료: ${data.fetched} / ${data.scannedIds}${data.unlimited ? " (전체)" : ""}`;
-  meta.textContent = [
-    `계정: ${data.account}`,
-    `스캔 ID: ${data.scannedIds}`,
-    `헤더 조회: ${data.fetched}`,
-    `에러: ${data.errors}`,
-    `고유 발신자: ${data.uniqueSenders}`,
-    data.unlimited ? "범위: 전체" : `범위: 최대 ${data.maxMessages}`,
-  ].join(" · ");
-
-  renderSenders(data.senders);
+function setLoggedOutUI() {
+  appPanel.classList.add("hidden");
+  loginPanel.classList.remove("hidden");
+  statusEl.textContent = "";
+  progressEl.textContent = "";
+  meta.textContent = "";
+  rows.innerHTML = "";
+  lastSenders = [];
+  gmailAccessToken = null;
+  saveBtn.disabled = true;
 }
 
-connectBtn.addEventListener("click", async () => {
+async function refreshMe() {
+  const res = await fetch("/api/me");
+  const data = await res.json();
+  if (data.loggedIn) setLoggedInUI(data);
+  else setLoggedOutUI();
+  return data;
+}
+
+async function handleCredentialResponse(response) {
   err.textContent = "";
-  const email = emailInput.value.trim();
-  if (!email) {
-    err.textContent = "이메일을 입력해 주세요.";
-    return;
-  }
-
-  connectBtn.disabled = true;
   try {
-    const res = await fetch("/api/auth/start", {
+    const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ credential: response.credential }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.statusText);
-    location.href = data.authUrl;
+    await refreshMe();
   } catch (e) {
     err.textContent = String(e.message || e);
-    connectBtn.disabled = false;
+    loginStatus.textContent = "로그인 실패";
+  }
+}
+
+function waitForGis() {
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    (function tick() {
+      if (window.google?.accounts?.id && window.google?.accounts?.oauth2) {
+        resolve();
+        return;
+      }
+      if (Date.now() - started > 15000) {
+        reject(new Error("Google Identity Services 로드 실패"));
+        return;
+      }
+      setTimeout(tick, 50);
+    })();
+  });
+}
+
+function renderGoogleButton() {
+  window.google.accounts.id.initialize({
+    client_id: config.clientId,
+    callback: handleCredentialResponse,
+    auto_select: false,
+    cancel_on_tap_outside: true,
+  });
+
+  googleBtn.innerHTML = "";
+  window.google.accounts.id.renderButton(googleBtn, {
+    theme: "outline",
+    size: "large",
+    text: "signin_with",
+    shape: "rectangular",
+    width: 280,
+  });
+}
+
+function requestGmailToken() {
+  return new Promise((resolve, reject) => {
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: config.clientId,
+      scope: config.gmailScope,
+      callback: (resp) => {
+        if (resp.error) {
+          reject(new Error(resp.error_description || resp.error));
+          return;
+        }
+        resolve(resp.access_token);
+      },
+      error_callback: (e) => {
+        reject(new Error(e?.message || "Gmail 권한 요청 실패"));
+      },
+    });
+    tokenClient.requestAccessToken({ prompt: "consent" });
+  });
+}
+
+scanBtn.addEventListener("click", async () => {
+  err.textContent = "";
+  meta.textContent = "";
+  progressEl.textContent = "Gmail 권한 요청 중…";
+  rows.innerHTML = "";
+  scanBtn.disabled = true;
+  saveBtn.disabled = true;
+
+  if (abortScan) abortScan.abort();
+  abortScan = new AbortController();
+
+  try {
+    gmailAccessToken = await requestGmailToken();
+    progressEl.textContent = "스캔 시작…";
+
+    const result = await collectSenders(gmailAccessToken, {
+      maxMessages: config.maxMessages,
+      concurrency: config.concurrency,
+      signal: abortScan.signal,
+      onProgress: (p) => {
+        progressEl.textContent = formatProgress(p);
+        if (p.senders?.length) renderSenders(p.senders);
+      },
+    });
+
+    progressEl.textContent = `완료: ${result.fetched} / ${result.scannedIds}${result.unlimited ? " (전체)" : ""}`;
+    meta.textContent = [
+      `Gmail: ${result.account}`,
+      `스캔 ID: ${result.scannedIds}`,
+      `헤더 조회: ${result.fetched}`,
+      `에러: ${result.errors}`,
+      `고유 발신자: ${result.uniqueSenders}`,
+    ].join(" · ");
+    renderSenders(result.senders);
+  } catch (e) {
+    err.textContent = String(e.message || e);
+  } finally {
+    scanBtn.disabled = false;
+  }
+});
+
+saveBtn.addEventListener("click", async () => {
+  err.textContent = "";
+  const domainMap = new Map();
+  for (const s of lastSenders) {
+    const domain = s.domain || domainFromEmail(s.email);
+    if (!domain) continue;
+    domainMap.set(domain, (domainMap.get(domain) || 0) + s.count);
+  }
+  const domains = [...domainMap.entries()].map(([domain, count]) => ({
+    domain,
+    count,
+  }));
+
+  try {
+    const res = await fetch("/api/candidates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domains }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    meta.textContent = `${meta.textContent || ""} · 서버 저장: 도메인 ${data.saved}개 (${data.savedAt})`;
+  } catch (e) {
+    err.textContent = String(e.message || e);
   }
 });
 
 logoutBtn.addEventListener("click", async () => {
-  err.textContent = "";
-  if (activeStream) {
-    activeStream.close();
-    activeStream = null;
+  if (abortScan) abortScan.abort();
+  if (gmailAccessToken && window.google?.accounts?.oauth2) {
+    try {
+      window.google.accounts.oauth2.revoke(gmailAccessToken);
+    } catch {
+      /* ignore */
+    }
   }
   await fetch("/api/auth/logout", { method: "POST" });
-  rows.innerHTML = "";
-  meta.textContent = "";
-  progressEl.textContent = "";
+  setLoggedOutUI();
+  renderGoogleButton();
+});
+
+async function boot() {
+  const cfgRes = await fetch("/api/config");
+  config = await cfgRes.json();
+  if (!cfgRes.ok) throw new Error(config.error || "config failed");
+
+  await waitForGis();
+  renderGoogleButton();
   await refreshMe();
-});
-
-loadBtn.addEventListener("click", async () => {
-  err.textContent = "";
-  meta.textContent = "";
-  rows.innerHTML = "";
-  progressEl.textContent = "시작 중…";
-  loadBtn.disabled = true;
-
-  if (activeStream) {
-    activeStream.close();
-    activeStream = null;
-  }
-
-  const es = new EventSource("/api/senders/stream");
-  activeStream = es;
-
-  es.addEventListener("start", (ev) => {
-    const data = JSON.parse(ev.data);
-    const scope = data.unlimited
-      ? `전체 메일함${data.estimatedTotal ? ` (~${data.estimatedTotal}건)` : ""}`
-      : `최대 ${data.maxMessages}건`;
-    progressEl.textContent = `계정 ${data.account} · ${scope} · 동시 ${data.concurrency || 12}`;
-  });
-
-  es.addEventListener("progress", (ev) => {
-    const data = JSON.parse(ev.data);
-    progressEl.textContent = formatProgress(data);
-    if (data.senders?.length) renderSenders(data.senders);
-  });
-
-  es.addEventListener("done", async (ev) => {
-    const data = JSON.parse(ev.data);
-    renderDone(data);
-    es.close();
-    activeStream = null;
-    loadBtn.disabled = false;
-    await refreshMe();
-  });
-
-  es.addEventListener("fail", (ev) => {
-    try {
-      const data = JSON.parse(ev.data);
-      err.textContent = data.error || "스캔 실패";
-    } catch {
-      err.textContent = "스캔 실패";
-    }
-    es.close();
-    activeStream = null;
-    loadBtn.disabled = false;
-  });
-
-  es.onerror = () => {
-    if (es.readyState === EventSource.CLOSED) {
-      if (!meta.textContent && !rows.innerHTML && !err.textContent) {
-        err.textContent = "연결이 끊겼습니다. 다시 시도해 주세요.";
-      }
-      activeStream = null;
-      loadBtn.disabled = false;
-    }
-  };
-});
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
-refreshMe().catch((e) => {
-  err.textContent = String(e.message || e);
+boot().catch((e) => {
+  const msg = String(e.message || e);
+  err.textContent = msg;
+  loginStatus.textContent = msg;
 });
