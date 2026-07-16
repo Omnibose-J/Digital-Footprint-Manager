@@ -138,7 +138,14 @@ const SPEC_TO_CHOICE = { in_use: "keep", unused: "delete" };
 async function classifySenders(services) {
   const senders = (services || [])
     .filter((s) => s.primaryEmail)
-    .map((s) => ({ key: s.key, displayName: s.displayName || "", email: s.primaryEmail }));
+    .map((s) => ({
+      key: s.key,
+      displayName: s.displayName || "",
+      // Not just the name the row prints: stripe.com is "Cursor via Stripe" and "Notion via Stripe"
+      // at once, and the winner alone is the one fact that cannot resolve either of them.
+      names: s.senderNames || [],
+      email: s.primaryEmail,
+    }));
   if (!senders.length) return {};
   try {
     const res = await fetch("/api/classify-senders", {

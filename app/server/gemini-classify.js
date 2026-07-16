@@ -46,25 +46,42 @@ export async function classifySendersWithGemini(senders) {
 
 /**
  * @param {string} apiKey
- * @param {{ displayName?: string, email?: string, key?: string }[]} batch
+ * @param {{ displayName?: string, names?: string[], email?: string, key?: string }[]} batch
  */
 async function classifyBatch(apiKey, batch) {
   const out = {};
-  const payload = batch.map((s) => ({
-    key: s.key || "",
-    displayName: String(s.displayName || "").slice(0, 200),
-    email: String(s.email || "").slice(0, 200),
-  }));
+  const payload = batch.map((s) => {
+    // Every name this domain sent under, not just the one the table prints. A relay's domain carries
+    // several services and the display name is the only place that survives — "Cursor via Stripe"
+    // resolves, "Stripe" cannot, and they are the same domain.
+    const names = (Array.isArray(s.names) ? s.names : [])
+      .map((n) => String(n || "").slice(0, 200))
+      .filter(Boolean)
+      .slice(0, 5);
+    const primary = String(s.displayName || "").slice(0, 200);
+    return {
+      key: s.key || "",
+      displayName: primary,
+      names: names.length ? names : primary ? [primary] : [],
+      email: String(s.email || "").slice(0, 200),
+    };
+  });
 
   const prompt = `You classify email senders for a Korean digital-footprint tool.
-You receive ONLY display name + email address. Never invent mail body content.
+You receive ONLY sender display names + email address. Never invent mail body content.
+
+"names" lists every display name this address sent under, most frequent first. A relay or payment
+processor sends for many services, so the names are the only evidence of who the mail is really for:
+"Cursor via Stripe" from receipts@stripe.com is Cursor's mail, not Stripe's.
 
 For EACH sender, return:
 - category: exactly one of "가입서비스" | "개인메일" | "기타"
   · 가입서비스 = automated mail from a service where the user likely has an account
   · 개인메일 = a real person (including the user themselves)
   · 기타 = ads, doc-share noise, relays, or anything else
-- realService: the real product/brand name if inferable (e.g. Stripe mail may be "Cursor"). If unknown, use the brand from the domain/name or "".
+- realService: the real product/brand name if inferable. Read "names" first — "X via Y" means X. If
+  the names show SEVERAL different services behind one relay, name the most frequent one and say so
+  in reason. If nothing in the names identifies a service, use the brand from the domain, or "".
 - reason: one short Korean sentence explaining the classification
 - email: copy the input email exactly
 - key: copy the input key exactly

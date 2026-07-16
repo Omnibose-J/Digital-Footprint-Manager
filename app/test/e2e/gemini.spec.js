@@ -14,21 +14,31 @@ import { installFakeGoogle, gmailMessage, authenticated, runScan, readTable } fr
 
 const SELF = "tester@gmail.com";
 
-/** Stripe's estate, Cursor's account. The exact shape the rules cannot resolve. */
+/**
+ * Stripe's estate, two accounts behind it. The exact shape the rules cannot resolve: one domain, one
+ * address, and the only thing separating Cursor from Notion is the display name.
+ */
 function mailbox() {
   return [
     gmailMessage({
       id: "g1",
-      from: "Stripe <receipts@stripe.com>",
+      from: "Cursor via Stripe <receipts@stripe.com>",
       subject: "결제가 완료되었습니다",
       date: "2024-02-01",
       headers: authenticated("stripe.com"),
     }),
     gmailMessage({
       id: "g2",
-      from: "Stripe <receipts@stripe.com>",
+      from: "Cursor via Stripe <receipts@stripe.com>",
       subject: "이메일 인증이 완료되었습니다",
       date: "2024-03-01",
+      headers: authenticated("stripe.com"),
+    }),
+    gmailMessage({
+      id: "g3",
+      from: "Notion via Stripe <receipts@stripe.com>",
+      subject: "결제가 완료되었습니다",
+      date: "2024-04-01",
       headers: authenticated("stripe.com"),
     }),
   ];
@@ -43,6 +53,28 @@ const CURSOR = {
 };
 
 test.describe("Gemini names the sender", () => {
+  test("it is sent every name the domain sent under, not just the one the row prints", async ({ page }) => {
+    // The row shows one name because a cell holds one name. The classifier needs all of them: this
+    // mailbox has Cursor and Notion behind a single Stripe address, and mostFrequentName's winner is
+    // the one fact that identifies neither. Sending only that was the bug — asserted here on the
+    // request body, because that is the only place the difference exists.
+    await installFakeGoogle(page, { account: SELF, messages: mailbox(), classify: CURSOR });
+    await page.goto("/");
+
+    const [req] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes("/api/classify-senders") && r.method() === "POST"),
+      runScan(page),
+    ]);
+
+    const stripe = req.postDataJSON().senders.find((s) => s.email.includes("stripe.com"));
+    expect(stripe, "stripe.com should reach the classifier").toBeTruthy();
+    expect(stripe.names).toContain("Cursor via Stripe");
+    expect(stripe.names).toContain("Notion via Stripe");
+    // Still the address, still no subject: §3's boundary did not move to make this work.
+    expect(stripe.email).toBe("receipts@stripe.com");
+    expect(JSON.stringify(req.postDataJSON())).not.toContain("결제가 완료되었습니다");
+  });
+
   test("renames a row whose domain belongs to someone else's mail estate", async ({ page }) => {
     await installFakeGoogle(page, { account: SELF, messages: mailbox(), classify: CURSOR });
     await page.goto("/");
@@ -94,8 +126,11 @@ test.describe("Gemini names the sender", () => {
 
     expect(view.err).toBe("");
     expect(view.services.length).toBeGreaterThan(0);
+    // The rules' own answer: mostFrequentName's winner, verbatim off the header. It is not wrong,
+    // it is just the relay's label rather than the account's — which is the whole reason Gemini is
+    // wired in, and exactly what the user sees when it cannot answer.
     await expect(page.locator("#rows tr", { hasText: "stripe.com" }).locator(".service-name")).toHaveText(
-      "Stripe"
+      "Cursor via Stripe"
     );
     await expect(page.locator(".why-inferred")).toHaveCount(0);
   });

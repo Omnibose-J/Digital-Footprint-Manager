@@ -320,6 +320,26 @@ function mostFrequentName(nameCounts) {
 }
 
 /**
+ * Every name this domain sent under, most frequent first.
+ *
+ * The row shows one name because a table cell holds one name. But a payment processor's domain is
+ * not one service — `stripe.com` arrives as "Cursor via Stripe" AND "Notion via Stripe", and
+ * mostFrequentName above answers "which of these do we print", not "who is this". Handing the
+ * classifier the winner alone throws away the only evidence of who the mail is actually for
+ * (PRODUCT_SPEC §8: naming is exactly what the LLM is here to do).
+ *
+ * Capped: this rides in an API request per §3's boundary, and the tail of a long list is noise —
+ * a name that appeared once among hundreds is not what this sender is.
+ */
+function topNames(nameCounts, limit = 5) {
+  return [...nameCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([name]) => name)
+    .filter(Boolean);
+}
+
+/**
  * Link fields for a candidate. Uses no aggregator instance state (SOW 005 R9).
  * @param {string|null} registrableDomain
  * @param {string|null} hiddenRule
@@ -530,6 +550,9 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
       key: svc.key, // stable identity across snapshots; registrableDomain is not unique
       registrableDomain: svc.registrableDomain,
       displayName: mostFrequentName(svc.nameCounts) || svc.registrableDomain || "",
+      // Every name, for LLM classify only — the row still prints displayName above. A relay's domain
+      // carries several services and only this shows it (§8).
+      senderNames: topNames(svc.nameCounts),
       // Representative From address for LLM classify only (never the message body).
       primaryEmail: emails[0] || "",
       messageCount: svc.messageCount,
