@@ -140,6 +140,7 @@ export function createApp(options = {}) {
     upsert: (...a) => getChoicesDb().upsert(...a),
     deleteOne: (...a) => getChoicesDb().deleteOne(...a),
     deleteAll: (...a) => getChoicesDb().deleteAll(...a),
+    updateStatus: (...a) => getChoicesDb().updateStatus(...a),
   };
 
   const app = express();

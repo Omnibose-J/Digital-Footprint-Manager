@@ -1,5 +1,5 @@
 /**
- * SOW 001 API — contract frozen in docs/sow/001-cleanup-labels-db.md §3.
+ * Choices API — SOW 001 §3 (labels) + SOW 002 §3a (completion status).
  * user_id comes from the session only. A user_id in the body is ignored.
  */
 
@@ -12,10 +12,21 @@ const CHOICES = new Set(["in_use", "unused"]);
  *   getSession: (req: import('express').Request) => Promise<{ sub: string } | null>,
  *   isSameOrigin: (req: import('express').Request) => boolean,
  *   db: {
- *     listByUser(userId: string): Promise<Array<{ domain: string, choice: string, labeledAt: string }>>,
+ *     listByUser(userId: string): Promise<Array<{
+ *       domain: string,
+ *       choice: string,
+ *       labeledAt: string,
+ *       withdrawnAt?: string|null,
+ *       unsubscribedAt?: string|null,
+ *     }>>,
  *     upsert(row: object): Promise<void>,
  *     deleteOne(userId: string, domain: string): Promise<void>,
  *     deleteAll(userId: string): Promise<number>,
+ *     updateStatus(
+ *       userId: string,
+ *       domain: string,
+ *       patch: { withdrawn?: boolean, unsubscribed?: boolean }
+ *     ): Promise<{ withdrawnAt: string|null, unsubscribedAt: string|null } | null>,
  *   },
  * }} deps
  */
@@ -46,16 +57,25 @@ export function createChoicesRouter(deps) {
     return true;
   }
 
-  /** GET /api/choices → { choices: { [domain]: { choice, labeledAt } } } */
+  /**
+   * GET /api/choices → {
+   *   choices: { [domain]: { choice, labeledAt, withdrawnAt, unsubscribedAt } }
+   * }
+   */
   router.get("/api/choices", async (req, res) => {
     const session = await requireSession(req, res);
     if (!session) return;
     try {
       const rows = await db.listByUser(session.sub);
-      /** @type {Record<string, { choice: string, labeledAt: string }>} */
+      /** @type {Record<string, { choice: string, labeledAt: string, withdrawnAt: string|null, unsubscribedAt: string|null }>} */
       const choices = {};
       for (const row of rows) {
-        choices[row.domain] = { choice: row.choice, labeledAt: row.labeledAt };
+        choices[row.domain] = {
+          choice: row.choice,
+          labeledAt: row.labeledAt,
+          withdrawnAt: row.withdrawnAt ?? null,
+          unsubscribedAt: row.unsubscribedAt ?? null,
+        };
       }
       res.json({ choices });
     } catch (err) {
@@ -97,6 +117,55 @@ export function createChoicesRouter(deps) {
         discoveryBand,
       });
       res.json({ ok: true });
+    } catch (err) {
+      dbUnavailable(res, err);
+    }
+  });
+
+  /**
+   * PATCH /api/choices/:domain/status — SOW 002 §3a.
+   * Omitted field = leave alone. true stamps server now(); false clears to null.
+   * 404 when no label row exists — never create a row from a completion.
+   */
+  router.patch("/api/choices/:domain/status", async (req, res) => {
+    const session = await requireSession(req, res);
+    if (!session) return;
+
+    const domain = normalizeDomain(req.params.domain);
+    if (!domain) {
+      res.status(400).json({ error: "domain required" });
+      return;
+    }
+
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    // user_id in the body is an attack vector, not an input — ignore entirely.
+    const patch = {};
+    if ("withdrawn" in body) {
+      if (typeof body.withdrawn !== "boolean") {
+        res.status(400).json({ error: "withdrawn must be boolean when present" });
+        return;
+      }
+      patch.withdrawn = body.withdrawn;
+    }
+    if ("unsubscribed" in body) {
+      if (typeof body.unsubscribed !== "boolean") {
+        res.status(400).json({ error: "unsubscribed must be boolean when present" });
+        return;
+      }
+      patch.unsubscribed = body.unsubscribed;
+    }
+
+    try {
+      const result = await db.updateStatus(session.sub, domain, patch);
+      if (!result) {
+        res.status(404).json({ error: "no label for domain" });
+        return;
+      }
+      res.json({
+        ok: true,
+        withdrawnAt: result.withdrawnAt,
+        unsubscribedAt: result.unsubscribedAt,
+      });
     } catch (err) {
       dbUnavailable(res, err);
     }
