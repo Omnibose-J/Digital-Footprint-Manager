@@ -133,7 +133,9 @@ export async function readTable(page) {
       progress: document.getElementById("progress").textContent,
       meta: document.getElementById("meta").textContent,
       err: document.getElementById("err").textContent,
-      // # / 서비스 / 도메인 / 정리 우선도 / 신뢰 / 마지막 흔적 / 건수 / 내 선택 / 탈퇴
+      // # / 서비스 / 도메인 / 정리 우선도 / 신뢰 / 마지막 흔적 / 건수 / 내 선택
+      // No 탈퇴 column: the 후보 list stopped offering a withdrawal for a service the user has not
+      // said anything about yet. It lives on the 미사용 tab now — read that with readUnusedTable.
       services: [...document.getElementById("rows").children].map((tr) => {
         const c = cells(tr);
         return {
@@ -144,7 +146,6 @@ export async function readTable(page) {
           month: c[5],
           count: c[6],
           choice: c[7],
-          action: c[8],
         };
       }),
       excluded: [...document.getElementById("hiddenRows").children].map((tr) => {
@@ -153,4 +154,19 @@ export async function readTable(page) {
       }),
     };
   });
+}
+
+/**
+ * Label a service 미사용 and switch to the tab that lists them, returning its row there.
+ *
+ * The withdrawal link only exists on this path now: the 후보 list asks "do you still use this" and
+ * offers nothing else until answered, so any test about 탈퇴 has to answer first. That is the real
+ * user journey too — nobody reached a cancel link without deciding they were done with the service.
+ */
+export async function markUnusedAndOpenTab(page, domain) {
+  await page.locator("#rows tr", { hasText: domain }).locator('button[data-choice="delete"]').click();
+  await page.click("#tabUnused");
+  const row = page.locator("#unusedRows tr", { hasText: domain });
+  await row.waitFor();
+  return row;
 }

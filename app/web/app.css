@@ -1262,11 +1262,14 @@ tr.row-closed td {
   .table-services td[data-label] > * {
     text-align: right;
   }
-  .table-services .cell-action {
+  /* The 탈퇴 column moved to the 미사용 tab with the rest of the withdrawal flow; this rule followed
+     it. Left on .table-services it styled a cell that no longer exists, and the link people actually
+     tap went back to being a text-height target on a phone. */
+  .table-unused .cell-action {
     padding-top: var(--s3);
   }
   /* Full width and a real height: this is the tap the whole screen exists for. */
-  .table-services .cell-action .btn-row {
+  .table-unused .cell-action .btn-row {
     width: 100%;
     min-height: 44px;
   }

@@ -153,7 +153,13 @@ export function computeCleanupScore(candidate, now = new Date()) {
     100,
     axes.dormancy + axes.sensitivity + axes.payment + axes.readiness
   );
-  const inUse = inUseSignal(candidate, now);
+  // The user saying "I still use this" outranks everything we inferred, and it is not a tie to break.
+  // §3 concedes email recency is a weak proxy for use and §8 closed the only other source, so
+  // inUseSignal below reads mail and mail cannot see a service the user logs into and never hears
+  // from. §4 already wrote what to do about that: "the guard is a floor, not the whole defense: the
+  // review UI asks the user to confirm disuse rather than asserting it." This is that confirm
+  // arriving. The score is left alone on purpose — same reason as the demotion below.
+  const inUse = candidate.cleanupChoice === "in_use" || inUseSignal(candidate, now);
   let cleanupBand = bandForCleanup(cleanupScore);
   // The guard demotes rather than rescores, so the number still explains itself and only the verdict
   // changes. A score that silently dropped would make the explanation below a lie.

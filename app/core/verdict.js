@@ -4,10 +4,12 @@
  * Pure by design, and separate from app.js on purpose: every progress tick replaces the snapshot,
  * so this has to re-run on each render, and it has to be testable without a DOM.
  *
- * PRODUCT_SPEC §3 defines four: owned, unsure, not_mine, and the restore back to candidate. Only
- * the restore is here. The other three each set a badge and feed a cleanup list (§4) that does
- * not exist, so they were controls arriving ahead of the thing they serve. Bring them back with
- * that list, not before.
+ * §3 used to define owned/not_mine/unsure alongside the restore. They were removed from the product
+ * on 2026-07-15 (7f0ff42) and struck from the spec on 2026-07-16: the owner ruled out bringing
+ * 내 계정 아님 back, and the screen asks one question now — 사용/미사용, which is §4's question
+ * ("clean this up first?"), never §3's ("did we find a real account?"). Nothing the user says moves
+ * discoveryScore. The restore stays here; the label rides in as `cleanupChoice` from web/app.js and
+ * this file only sorts by it.
  */
 
 /**
@@ -24,6 +26,14 @@
  * says so with a dash rather than a number.
  */
 function compareByScoreThenCount(a, b) {
+  // An answered row sinks, whichever way it was answered. The list is a queue of open questions, and
+  // ranking one the user has already settled — either way — above one they have not is asking twice.
+  // It stays on the list rather than disappearing: "I decided" is not "take it off my screen", and a
+  // label is reversible.
+  const la = a.cleanupChoice ? 1 : 0;
+  const lb = b.cleanupChoice ? 1 : 0;
+  if (la !== lb) return la - lb;
+
   const pa = typeof a.cleanupScore === "number" ? a.cleanupScore : -1;
   const pb = typeof b.cleanupScore === "number" ? b.cleanupScore : -1;
   if (pb !== pa) return pb - pa;

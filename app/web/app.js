@@ -209,6 +209,24 @@ function unusedServicesFromSnapshot(snapshot) {
   return (snapshot?.services || []).filter((s) => getChoice(s.registrableDomain) === "delete");
 }
 
+/**
+ * 미사용 탭 only. The 후보 list dropped this column: that list asks "which of these do you still
+ * use", and an answer to a question the user has not been asked yet is clutter with a target on it.
+ * Here the user has already said 미사용, so the withdrawal route is the next thing they want and
+ * this tab exists to hand it to them.
+ */
+function deletionCell(s) {
+  if (s.likelyClosed) {
+    return `<span class="band band-closed">폐쇄 추정</span>`;
+  }
+  const name = s.displayName || s.registrableDomain || "";
+  const domain = normalizeDomain(s.registrableDomain);
+  const action = resolveCancelLink(s.registrableDomain, name);
+  return `<a class="btn-row" href="${escapeHtml(action.url)}" data-out="cancel" data-cancel-type="${escapeHtml(
+    action.type
+  )}" data-domain="${escapeHtml(domain)}" target="_blank" rel="noopener noreferrer">${escapeHtml(action.label)}</a>`;
+}
+
 function unusedRowHtml(s, i) {
   const domain = normalizeDomain(s.registrableDomain);
   const done = isDone(domain);
@@ -271,17 +289,6 @@ function serviceCell(s) {
   return `<a class="service-link" href="https://${escapeHtml(domain)}" data-out="list" data-safety="domain" target="_blank" rel="noopener noreferrer">${nameHtml}${domainHtml}</a>`;
 }
 
-function deletionCell(s) {
-  if (s.likelyClosed) {
-    return `<span class="band band-closed">폐쇄 추정</span>`;
-  }
-  const name = s.displayName || s.registrableDomain || "";
-  const domain = normalizeDomain(s.registrableDomain);
-  const action = resolveCancelLink(s.registrableDomain, name);
-  return `<a class="btn-row" href="${escapeHtml(action.url)}" data-out="cancel" data-cancel-type="${escapeHtml(
-    action.type
-  )}" data-domain="${escapeHtml(domain)}" target="_blank" rel="noopener noreferrer">${escapeHtml(action.label)}</a>`;
-}
 
 function choiceCell(s) {
   const domain = normalizeDomain(s.registrableDomain);
@@ -303,8 +310,9 @@ function bandCell(s) {
   const band = s.discoveryBand || "low";
   const score = s.discoveryScore ?? 0;
   const expl = s.scoreExplanation || `${score}점`;
-  // No 폐쇄 추정 badge here. deletionCell already renders it in place of the 탈퇴 button, which is
-  // where it belongs: it is an answer to "can I leave", not to "how sure are we you joined".
+  // No 폐쇄 추정 badge here. cleanupCell renders it, which is where it belongs: it is an answer to
+  // "can I leave", not to "how sure are we you joined". (It sat in deletionCell until the 후보 list
+  // dropped that column; the 미사용 tab still renders it there for the same reason.)
   return `<span class="band band-${escapeHtml(band)}">${escapeHtml(BAND_LABEL[band] || band)} ${escapeHtml(String(score))}</span><span class="score-why">${escapeHtml(expl)}</span>`;
 }
 
@@ -323,6 +331,12 @@ const CLEANUP_LABEL = {
  * the product, because the user works down the list.
  */
 function cleanupCell(s) {
+  // 폐쇄 추정 lived in the 탈퇴 column until that column left the list. This is where it belonged
+  // anyway: §4 excludes likely_closed from cleanup entirely, so this cell would otherwise print a
+  // bare "—" and make the reader guess which of the three reasons for a dash applies.
+  if (s.likelyClosed) {
+    return `<span class="band band-closed">폐쇄 추정</span>`;
+  }
   if (s.cleanupScore === null || s.cleanupScore === undefined) {
     return `<span class="cell-none" title="신뢰 '높음' 후보만 우선도를 계산합니다">—</span>`;
   }
@@ -332,11 +346,33 @@ function cleanupCell(s) {
   return `<span class="pri pri-${escapeHtml(band)}">${label} ${escapeHtml(String(s.cleanupScore))}</span>${inUse}<span class="score-why">${escapeHtml(s.cleanupWhy || "")}</span>`;
 }
 
+/**
+ * The row's buttons and the GA events speak keep/delete — §8's analytics decision names `mark_keep`
+ * and `mark_delete` by those words, and renaming them would orphan the funnel we just started
+ * measuring. Everything past this line speaks §3's language instead: `cleanupChoice`, which
+ * cleanup.js reads for the in-use guard and verdict.js sorts by, and which /api/choices persists.
+ * One map, one direction, one place — so neither vocabulary leaks into the other's half.
+ */
+const CHOICE_TO_SPEC = { keep: "in_use", delete: "unused" };
+
+function withCleanupChoices(snapshot) {
+  return {
+    ...snapshot,
+    services: (snapshot.services || []).map((s) => ({
+      ...s,
+      cleanupChoice: CHOICE_TO_SPEC[getChoice(s.registrableDomain)] || null,
+    })),
+  };
+}
+
 function withCatalog(rawSnapshot) {
   // Order is forced: verdict moves buckets and clears hiddenRule, the catalog pass reads hiddenRule
   // to decide the link and only then can score cleanup, and the sort ranks by that score. Sorting
   // any earlier ranks by a field that does not exist yet.
-  const overridden = applyUserVerdict(rawSnapshot, userVerdict);
+  //
+  // The label goes on before the catalog pass, not after: computeCleanupScore reads cleanupChoice
+  // for the in-use guard, so a label applied later would be a label the score never saw.
+  const overridden = withCleanupChoices(applyUserVerdict(rawSnapshot, userVerdict));
   if (!catalog) return overridden;
   return sortBuckets(upgradeSnapshot(overridden, catalog));
 }
@@ -352,8 +388,7 @@ function rowHtml(s, i) {
       <td data-label="신뢰">${bandCell(s)}</td>
       <td class="cell-month" data-label="마지막 흔적">${escapeHtml(s.lastSeenMonth || "—")}</td>
       <td class="col-count" data-label="건수">${s.messageCount}</td>
-      <td class="cell-choice" data-label="내 선택">${choiceCell(s)}</td>
-      <td class="cell-action">${deletionCell(s)}</td>`;
+      <td class="cell-choice" data-label="내 선택">${choiceCell(s)}</td>`;
 }
 
 /**

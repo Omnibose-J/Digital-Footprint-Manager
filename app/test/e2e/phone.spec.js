@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { installFakeGoogle, gmailMessage, authenticated, runScan } from "./harness.js";
+import {
+  installFakeGoogle,
+  gmailMessage,
+  authenticated,
+  runScan,
+  markUnusedAndOpenTab,
+} from "./harness.js";
 
 /**
  * The phone, at the width most Korean users actually hold (iPhone 12/13/14/15 mini and the SE are
@@ -69,7 +75,7 @@ test.describe("the phone", () => {
   }) => {
     await openAt(page, PHONE);
     await runScan(page);
-    const btn = page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]');
+    const btn = (await markUnusedAndOpenTab(page, "spotify.com")).locator('a[data-out="cancel"]');
     await expect(btn).toBeVisible();
 
     // Visible to Playwright is not visible to a person: an element inside an overflow-x container
@@ -85,7 +91,7 @@ test.describe("the phone", () => {
     await openAt(page, PHONE);
     await runScan(page);
 
-    const link = page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]');
+    const link = (await markUnusedAndOpenTab(page, "spotify.com")).locator('a[data-out="cancel"]');
     await expect(link).toBeVisible();
     const linkBox = await link.boundingBox();
     expect(linkBox.height, "cancel link is smaller than a fingertip").toBeGreaterThanOrEqual(44);

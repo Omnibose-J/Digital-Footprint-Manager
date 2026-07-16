@@ -1,5 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { installFakeGoogle, gmailMessage, authenticated, runScan, readTable } from "./harness.js";
+import {
+  installFakeGoogle,
+  gmailMessage,
+  authenticated,
+  runScan,
+  readTable,
+  markUnusedAndOpenTab,
+} from "./harness.js";
 
 const SELF = "tester@gmail.com";
 
@@ -90,6 +97,18 @@ function mailbox() {
       labelIds: ["CATEGORY_PROMOTIONS"],
       headers: authenticated("github.com"),
     }),
+    // Marketing only, so it lands in 낮음 and §4 refuses to rank it. Nothing else in this mailbox is
+    // both unranked AND open: auction is unranked because it is closed, which cleanup.js checks
+    // first, so before this row the "only high-band is scored" branch had no subject on screen and
+    // the e2e that claimed to cover it was reading the closure branch instead.
+    gmailMessage({
+      id: "m12",
+      from: "무신사 <news@musinsa.com>",
+      subject: "이번 주 세일",
+      date: "2024-06-01",
+      labelIds: ["CATEGORY_PROMOTIONS"],
+      headers: authenticated("musinsa.com"),
+    }),
     // A person, not a service. Must be excluded, not listed.
     gmailMessage({
       id: "m10",
@@ -169,15 +188,16 @@ test.describe("the scan a user actually sees", () => {
     const view = await runScan(page);
     const auction = view.services.find((s) => s.domain === "auction.co.kr");
     expect(auction).toBeTruthy();
-    // The badge lives in the 탈퇴 column, not the 신뢰 one: it answers "can I leave", not
-    // "how sure are we you joined". It used to render in both.
-    expect(auction.action).toContain("폐쇄 추정");
+    // The badge lives in 정리 우선도, not 신뢰: it answers "can I leave", not "how sure are we you
+    // joined". It used to render in the 탈퇴 column, which the 후보 list no longer has — and 정리
+    // 우선도 is where §4 puts the answer anyway, since likely_closed is exactly why there is no rank.
+    expect(auction.priority).toContain("폐쇄 추정");
     expect(auction.band).not.toContain("폐쇄 추정");
   });
 
   test("the cancel link opens the mapped Spotify withdrawal URL", async ({ page }) => {
     await runScan(page);
-    const link = page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]');
+    const link = (await markUnusedAndOpenTab(page, "spotify.com")).locator('a[data-out="cancel"]');
     await expect(link).toHaveText("탈퇴 페이지 열기");
     await expect(link).toHaveAttribute("href", "https://support.spotify.com/article/close-account/");
     await expect(link).toHaveAttribute("target", "_blank");
@@ -186,6 +206,7 @@ test.describe("the scan a user actually sees", () => {
 
   test("the cancel link is counted as outbound", async ({ page }) => {
     await runScan(page);
+    const row = await markUnusedAndOpenTab(page, "spotify.com");
     const events = () =>
       page.evaluate(() =>
         (window.dataLayer || [])
@@ -196,7 +217,7 @@ test.describe("the scan a user actually sees", () => {
 
     const [popup] = await Promise.all([
       page.waitForEvent("popup"),
-      page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]').click(),
+      row.locator('a[data-out="cancel"]').click(),
     ]);
     await popup.close();
     const cancelClicks = (await events()).filter((e) => e.name === "outbound_click");
@@ -278,9 +299,10 @@ test.describe("the scan a user actually sees", () => {
 
   test("following a cancel link is counted, without the URL", async ({ page }) => {
     await runScan(page);
+    const row = await markUnusedAndOpenTab(page, "spotify.com");
     const [popup] = await Promise.all([
       page.waitForEvent("popup"),
-      page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]').click(),
+      row.locator('a[data-out="cancel"]').click(),
     ]);
     await popup.close();
 
@@ -297,14 +319,16 @@ test.describe("the scan a user actually sees", () => {
 
   test("mapped and unmapped rows both get a cancel link with the right label", async ({ page }) => {
     await runScan(page);
+    // Both labelled first, then one tab switch: the withdrawal link is a 미사용-tab thing now.
+    await page.locator("#rows tr", { hasText: "vercel.com" }).locator('button[data-choice="delete"]').click();
+    await page.locator("#rows tr", { hasText: "spotify.com" }).locator('button[data-choice="delete"]').click();
+    await page.click("#tabUnused");
 
-    const vercel = page.locator("#rows tr", { hasText: "vercel.com" });
-    await expect(vercel).toBeVisible();
-    const vercelLink = vercel.locator('a[data-out="cancel"]');
+    const vercelLink = page.locator("#unusedRows tr", { hasText: "vercel.com" }).locator('a[data-out="cancel"]');
     await expect(vercelLink).toHaveText("계정 설정 열기");
     await expect(vercelLink).toHaveAttribute("href", "https://vercel.com/account");
 
-    const spotify = page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]');
+    const spotify = page.locator("#unusedRows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]');
     await expect(spotify).toHaveText("탈퇴 페이지 열기");
     await expect(spotify).toHaveAttribute("href", "https://support.spotify.com/article/close-account/");
   });
@@ -323,9 +347,9 @@ test.describe("the scan a user actually sees", () => {
     // no_route was counting the pre-catalog snapshot and could only ever equal candidates. On the
     // real mailbox that shipped as 63 of 63 with four 탈퇴 buttons on screen.
     //
-    // Of the four candidates: Spotify, GitHub and 옥션 are catalogued, Vercel is not, and 옥션 is
-    // likely_closed so it is out of the count entirely. That leaves exactly Vercel.
-    expect(scan.candidates).toBe(4);
+    // Of the five candidates: Spotify, GitHub, 옥션 and 무신사 are catalogued, Vercel is not, and
+    // 옥션 is likely_closed so it is out of the count entirely. That leaves exactly Vercel.
+    expect(scan.candidates).toBe(5);
     expect(scan.no_route).toBe(1);
 
     // The boundary, asserted against the real event and not a hand-built one: every value that
@@ -335,7 +359,16 @@ test.describe("the scan a user actually sees", () => {
       expect(typeof v, `scan_completed.${k} = ${v}`).not.toBe("string");
     }
     const serialised = JSON.stringify(await page.evaluate(() => window.dataLayer.map((a) => Array.from(a))));
-    for (const leak of ["spotify.com", "vercel.com", "github.com", "auction.co.kr", SELF, "Spotify", "Vercel"]) {
+    for (const leak of [
+      "spotify.com",
+      "vercel.com",
+      "github.com",
+      "auction.co.kr",
+      "musinsa.com",
+      SELF,
+      "Spotify",
+      "Vercel",
+    ]) {
       expect(serialised, `${leak} reached the dataLayer`).not.toContain(leak);
     }
   });
@@ -344,7 +377,12 @@ test.describe("the scan a user actually sees", () => {
     // The whole point of the reorder. Spotify (2024, dormant) and GitHub (2025, recent) are both
     // high-band, and confidence alone put GitHub near the top: the account being used every day.
     const view = await runScan(page);
-    const ranked = view.services.filter((s) => !s.priority.startsWith("—"));
+    // Unranked comes in two shapes now: "—" (not confident enough to rank) and 폐쇄 추정 (nothing to
+    // rank — §4 excludes closed accounts). Both are "no number here"; only the reason differs, and
+    // reading just the dash counted the closed row as ranked and then compared it against a score
+    // it does not have.
+    const isUnranked = (s) => s.priority.startsWith("—") || s.priority.includes("폐쇄 추정");
+    const ranked = view.services.filter((s) => !isUnranked(s));
     expect(ranked.length).toBeGreaterThan(0);
 
     const scoreOf = (s) => Number(/\d+/.exec(s.priority)?.[0] ?? -1);
@@ -352,16 +390,22 @@ test.describe("the scan a user actually sees", () => {
       expect(scoreOf(ranked[i - 1])).toBeGreaterThanOrEqual(scoreOf(ranked[i]));
     }
     // Unranked rows sink below every ranked one instead of mixing in.
-    const firstUnranked = view.services.findIndex((s) => s.priority.startsWith("—"));
+    const firstUnranked = view.services.findIndex(isUnranked);
     if (firstUnranked !== -1) {
-      expect(view.services.slice(firstUnranked).every((s) => s.priority.startsWith("—"))).toBe(true);
+      expect(view.services.slice(firstUnranked).every(isUnranked)).toBe(true);
     }
   });
 
   test("a row we are not sure about shows a dash, not a rank of zero", async ({ page }) => {
     // "Not ranked" and "ranked last" are different sentences. §4 scores only high-band.
+    //
+    // Excludes 폐쇄 추정 rows: they are also unranked, but for a reason the cell now names outright
+    // rather than leaving as a dash. This test is about the unnamed reason — "we are not confident
+    // enough to rank this" — so it has to pick a row that actually has it.
     const view = await runScan(page);
-    const unsure = view.services.find((s) => !s.band.startsWith("높음"));
+    const unsure = view.services.find(
+      (s) => !s.band.startsWith("높음") && !s.priority.includes("폐쇄 추정")
+    );
     expect(unsure).toBeTruthy();
     expect(unsure.priority).toContain("—");
   });
@@ -424,12 +468,13 @@ test.describe("the scan a user actually sees", () => {
     // from the cleanup list, so deletionCell renders the badge in place of the withdrawal action.
     // Guiding someone to withdraw from an account they already closed is the wrong instruction.
     //
-    // Counts the cancel link, not every button in the row: the row now also carries 사용/미사용,
-    // which are a question about the account, not an instruction to leave it. A bare
-    // getByRole("button") here asserted "this row has no controls at all", which was only ever
-    // true by accident — the withdrawal action was the row's one button.
+    // Checked on the 미사용 tab, because that is the only place a withdrawal link exists at all now —
+    // asserting its absence on the 후보 list would pass for a service that never closed, and prove
+    // nothing. Here the row sits next to rows that DO carry the link, so the absence is the claim.
     await runScan(page);
-    const row = page.locator("#rows tr", { hasText: "auction.co.kr" });
+    await expect(page.locator("#rows tr", { hasText: "auction.co.kr" })).toContainText("폐쇄 추정");
+
+    const row = await markUnusedAndOpenTab(page, "auction.co.kr");
     await expect(row).toContainText("폐쇄 추정");
     await expect(row.locator("a[data-out='cancel']")).toHaveCount(0);
   });

@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { OAuth2Client } from "google-auth-library";
 import { classifySendersWithGemini, loadGeminiApiKey } from "./gemini-classify.js";
 import { loadGaMeasurementId } from "./load-local-config.js";
+import { createChoicesRouter } from "./choices-routes.js";
+import { getChoicesDb } from "./choices-db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Each asset dir is mounted by name. Serving app/ wholesale would expose .env and this source.
@@ -28,6 +30,7 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
   // GIS token client talks to accounts.google.com (not only /gsi/) and oauth2.googleapis.com;
   // Gmail metadata stays on gmail.googleapis.com.
+  // Supabase is server-side only — do not add its host to connect-src (SOW 001 §5).
   "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://gmail.googleapis.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
   "frame-src https://accounts.google.com/gsi/ https://accounts.google.com/",
   "img-src 'self' data: https://*.googleusercontent.com https://*.google-analytics.com https://www.googletagmanager.com",
@@ -35,20 +38,6 @@ const CONTENT_SECURITY_POLICY = [
   "base-uri 'none'",
   "form-action 'self'",
 ].join("; ");
-
-const app = express();
-app.disable("x-powered-by");
-app.use(express.json({ limit: "1mb" }));
-
-app.use((req, res, next) => {
-  res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Referrer-Policy", "no-referrer");
-  if (req.path.startsWith("/api")) {
-    res.setHeader("Cache-Control", "no-store");
-  }
-  next();
-});
 
 function parseCookies(req) {
   const raw = req.headers.cookie || "";
@@ -74,7 +63,7 @@ function parseCookies(req) {
  * server-side session map logs the user out at random. An ID token asserts identity only
  * and carries no Gmail scope, so this cookie still grants no mailbox access.
  */
-async function getSession(req) {
+async function defaultGetSession(req) {
   const idToken = parseCookies(req).dfm_idt;
   if (!idToken || !oauthClient) return null;
   try {
@@ -118,87 +107,13 @@ function clearSessionCookie(req, res) {
   res.setHeader("Set-Cookie", sessionCookie(req, "", 0));
 }
 
-async function requireSession(req, res) {
-  const session = await getSession(req);
-  if (!session) {
-    res.status(401).json({ error: "로그인이 필요합니다." });
-    return null;
-  }
-  return session;
-}
-
-app.get("/api/config", (_req, res) => {
-  if (!clientId) {
-    res.status(500).json({ error: "GOOGLE_CLIENT_ID is not configured in .env" });
-    return;
-  }
-  res.json({
-    clientId,
-    maxMessages,
-    concurrency,
-    gmailScope: "https://www.googleapis.com/auth/gmail.readonly",
-    gaMeasurementId,
-  });
-});
-
-app.get("/api/me", async (req, res) => {
-  const session = await getSession(req);
-  if (!session) {
-    res.json({ loggedIn: false });
-    return;
-  }
-  res.json({
-    loggedIn: true,
-    email: session.email,
-    name: session.name,
-    picture: session.picture || null,
-  });
-});
-
-app.post("/api/auth/login", async (req, res) => {
-  try {
-    if (!oauthClient || !clientId) {
-      res.status(500).json({ error: "GOOGLE_CLIENT_ID missing in .env" });
-      return;
-    }
-
-    const credential = String(req.body?.credential || "");
-    if (!credential) {
-      res.status(400).json({ error: "credential required" });
-      return;
-    }
-
-    const ticket = await oauthClient.verifyIdToken({
-      idToken: credential,
-      audience: clientId,
-    });
-    const payload = ticket.getPayload();
-    if (!payload?.sub || !payload.email) {
-      res.status(401).json({ error: "Invalid Google ID token" });
-      return;
-    }
-
-    setSessionCookie(req, res, credential);
-
-    res.json({
-      loggedIn: true,
-      email: payload.email,
-      name: payload.name || payload.email,
-    });
-  } catch {
-    // Never interpolate the error object — google-auth-library embeds credential material (R3).
-    console.error("login failed");
-    res.status(401).json({ error: "로그인에 실패했습니다." });
-  }
-});
-
 /**
  * SameSite=Lax already blocks the cookie on a cross-site POST, so a forged logout cannot carry the
  * session and the state-changing part is inert. It still returns 200 and a clearing Set-Cookie,
  * which is noise a same-origin check removes for the cost of four lines.
  *
  * Only the mutating routes get this. A browser omits Origin on same-origin GETs, so demanding it
- * everywhere would break the reads.
+ * everywhere would break the reads. Choices routes reuse the same helper (missing Origin = ok).
  */
 function isSameOrigin(req) {
   const origin = req.get("origin");
@@ -210,44 +125,152 @@ function isSameOrigin(req) {
   }
 }
 
-app.post("/api/auth/logout", (req, res) => {
-  if (!isSameOrigin(req)) {
-    res.status(403).json({ error: "cross-origin" });
-    return;
-  }
-  clearSessionCookie(req, res);
-  res.json({ ok: true });
-});
-
 /**
- * Gemini classify: display name + email only. Batches of 20 on the server.
- * On any failure the client keeps rule-based scores unchanged.
+ * @param {{
+ *   getSession?: typeof defaultGetSession,
+ *   choicesDb?: ReturnType<typeof getChoicesDb>,
+ * }} [options]
  */
-app.post("/api/classify-senders", async (req, res) => {
-  if (!isSameOrigin(req)) {
-    res.status(403).json({ error: "cross-origin" });
-    return;
-  }
-  if (!loadGeminiApiKey()) {
-    res.status(503).json({ error: "GEMINI_API_KEY missing", results: {} });
-    return;
-  }
-  const senders = Array.isArray(req.body?.senders) ? req.body.senders.slice(0, 500) : [];
-  try {
-    const results = await classifySendersWithGemini(senders);
-    res.json({ results });
-  } catch (e) {
-    console.warn("[gemini] classify route failed", e?.message || e);
-    res.json({ results: {} });
-  }
-});
+export function createApp(options = {}) {
+  const getSession = options.getSession || defaultGetSession;
+  // Production resolves the lazy Supabase store on first choices request.
+  // Tests pass an in-memory store so npm test never needs live credentials.
+  const choicesDb = options.choicesDb || {
+    listByUser: (...a) => getChoicesDb().listByUser(...a),
+    upsert: (...a) => getChoicesDb().upsert(...a),
+    deleteOne: (...a) => getChoicesDb().deleteOne(...a),
+    deleteAll: (...a) => getChoicesDb().deleteAll(...a),
+  };
 
-app.use(express.static(webDir));
-app.use("/core", express.static(coreDir));
-app.use("/data", express.static(dataDir));
+  const app = express();
+  app.disable("x-powered-by");
+  app.use(express.json({ limit: "1mb" }));
+
+  app.use((req, res, next) => {
+    res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    if (req.path.startsWith("/api")) {
+      res.setHeader("Cache-Control", "no-store");
+    }
+    next();
+  });
+
+  app.get("/api/config", (_req, res) => {
+    if (!clientId) {
+      res.status(500).json({ error: "GOOGLE_CLIENT_ID is not configured in .env" });
+      return;
+    }
+    res.json({
+      clientId,
+      maxMessages,
+      concurrency,
+      gmailScope: "https://www.googleapis.com/auth/gmail.readonly",
+      gaMeasurementId,
+    });
+  });
+
+  app.get("/api/me", async (req, res) => {
+    const session = await getSession(req);
+    if (!session) {
+      res.json({ loggedIn: false });
+      return;
+    }
+    res.json({
+      loggedIn: true,
+      email: session.email,
+      name: session.name,
+      picture: session.picture || null,
+    });
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      if (!oauthClient || !clientId) {
+        res.status(500).json({ error: "GOOGLE_CLIENT_ID missing in .env" });
+        return;
+      }
+
+      const credential = String(req.body?.credential || "");
+      if (!credential) {
+        res.status(400).json({ error: "credential required" });
+        return;
+      }
+
+      const ticket = await oauthClient.verifyIdToken({
+        idToken: credential,
+        audience: clientId,
+      });
+      const payload = ticket.getPayload();
+      if (!payload?.sub || !payload.email) {
+        res.status(401).json({ error: "Invalid Google ID token" });
+        return;
+      }
+
+      setSessionCookie(req, res, credential);
+
+      res.json({
+        loggedIn: true,
+        email: payload.email,
+        name: payload.name || payload.email,
+      });
+    } catch {
+      // Never interpolate the error object — google-auth-library embeds credential material (R3).
+      console.error("login failed");
+      res.status(401).json({ error: "로그인에 실패했습니다." });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    if (!isSameOrigin(req)) {
+      res.status(403).json({ error: "cross-origin" });
+      return;
+    }
+    clearSessionCookie(req, res);
+    res.json({ ok: true });
+  });
+
+  /**
+   * Gemini classify: display name + email only. Batches of 20 on the server.
+   * On any failure the client keeps rule-based scores unchanged.
+   */
+  app.post("/api/classify-senders", async (req, res) => {
+    if (!isSameOrigin(req)) {
+      res.status(403).json({ error: "cross-origin" });
+      return;
+    }
+    if (!loadGeminiApiKey()) {
+      res.status(503).json({ error: "GEMINI_API_KEY missing", results: {} });
+      return;
+    }
+    const senders = Array.isArray(req.body?.senders) ? req.body.senders.slice(0, 500) : [];
+    try {
+      const results = await classifySendersWithGemini(senders);
+      res.json({ results });
+    } catch (e) {
+      console.warn("[gemini] classify route failed", e?.message || e);
+      res.json({ results: {} });
+    }
+  });
+
+  // SOW 001 — cleanup labels. Drop these routes + user_service_choice to exit the pilot.
+  app.use(createChoicesRouter({ getSession, isSameOrigin, db: choicesDb }));
+
+  app.use(express.static(webDir));
+  app.use("/core", express.static(coreDir));
+  app.use("/data", express.static(dataDir));
+
+  return app;
+}
+
+const app = createApp();
+export default app;
 
 // On Vercel the platform invokes the exported app; binding a port there would hang the build.
-if (!process.env.VERCEL) {
+// When this file is imported by tests, do not listen either.
+const entryPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
+const thisPath = fileURLToPath(import.meta.url);
+if (entryPath === thisPath && !process.env.VERCEL) {
   const server = app.listen(port, () => {
     console.log(`DFM prototype: http://localhost:${port}`);
     console.log("Product login on server; Gmail scan stays in the browser.");
@@ -263,5 +286,3 @@ if (!process.env.VERCEL) {
     throw err;
   });
 }
-
-export default app;
