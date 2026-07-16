@@ -240,6 +240,15 @@ export function createApp(options = {}) {
       res.status(403).json({ error: "cross-origin" });
       return;
     }
+    // Same-origin stops another site's page from calling this in a browser. It stops nothing else,
+    // and it was the only gate here while the route 503'd for want of a key. With the key live this
+    // is a Gemini proxy on our quota, so it gets the check every other data route already has: the
+    // caller supplies the addresses, so this protects the bill rather than a mailbox — which is why
+    // it is 401 and not something cleverer.
+    if (!(await getSession(req))) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
     if (!loadGeminiApiKey()) {
       res.status(503).json({ error: "GEMINI_API_KEY missing", results: {} });
       return;
