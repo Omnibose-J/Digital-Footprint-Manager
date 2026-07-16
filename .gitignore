@@ -13,6 +13,14 @@ token.json
 # Local-only Gemini API key (never commit)
 src/lib/config.ts
 
+# SOW documents are working papers, not repo history: they are the brief handed to whoever builds a
+# thing, and they go stale the moment it is built. What survives belongs in PRODUCT_SPEC (the
+# contract), §8 (why), or docs/tracking/findings.md (what we knew and left).
+sow/
+
+# The codegraph index (anatomy-cg): derived from the source, rebuilt in under a second.
+.codegraph/
+
 # Playwright
 app/test-results/
 app/playwright-report/
