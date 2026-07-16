@@ -159,19 +159,20 @@ test.describe("the scan a user actually sees", () => {
 
     const spotify = view.services.find((s) => s.domain === "spotify.com");
     expect(spotify, "spotify should be a candidate").toBeTruthy();
-    // verification 55 + auth 35 = 90
-    expect(spotify.band).toContain("높음");
-    expect(spotify.band).toContain("이메일 인증 완료");
-    expect(spotify.band).toContain("비밀번호 재설정");
+    // verification 55 + auth 35 = 90 → high. Read through 비고 rather than a band: the screen shows
+    // no 신뢰 any more, and §4 ranks high-band rows only, so a cleanup reason IS the high band
+    // arriving. The arithmetic itself is score.test.js's job.
+    expect(spotify.remark).toContain("방치");
   });
 
   test("an old account with no signup mail still reaches high on auth alone plus corroboration", async ({ page }) => {
-    // The measured failure this exists to guard: GitHub sat at 65 because auth froze at 45.
+    // The measured failure this exists to guard: GitHub sat at 65 because auth froze at 45, and a
+    // row that misses high gets no cleanup reason at all (§4) — so this row having one, in a mailbox
+    // whose GitHub mail carries no 가입 message, is the guard surviving end to end.
     const view = await runScan(page);
     const gh = view.services.find((s) => s.domain === "github.com");
     expect(gh).toBeTruthy();
-    expect(gh.band).not.toContain("가입");
-    expect(gh.band).toContain("높음");
+    expect(gh.remark).toContain("방치");
   });
 
   test("a person is excluded and the user's own address does not take its domain with it", async ({ page }) => {
@@ -188,11 +189,11 @@ test.describe("the scan a user actually sees", () => {
     const view = await runScan(page);
     const auction = view.services.find((s) => s.domain === "auction.co.kr");
     expect(auction).toBeTruthy();
-    // The badge lives in 정리 우선도, not 신뢰: it answers "can I leave", not "how sure are we you
-    // joined". It used to render in the 탈퇴 column, which the 후보 list no longer has — and 정리
-    // 우선도 is where §4 puts the answer anyway, since likely_closed is exactly why there is no rank.
-    expect(auction.priority).toContain("폐쇄 추정");
-    expect(auction.band).not.toContain("폐쇄 추정");
+    // The badge leads 비고 and nothing else in that cell competes with it: §4 excludes likely_closed
+    // from cleanup entirely, so "폐쇄 추정" IS the whole remark. It has moved twice — out of 탈퇴 when
+    // the 후보 list dropped that column, then into 비고 when 정리 우선도 and 신뢰 merged.
+    expect(auction.remark).toContain("폐쇄 추정");
+    expect(auction.remark).not.toContain("방치");
   });
 
   test("the cancel link opens the mapped Spotify withdrawal URL", async ({ page }) => {
@@ -377,19 +378,20 @@ test.describe("the scan a user actually sees", () => {
     // The whole point of the reorder. Spotify (2024, dormant) and GitHub (2025, recent) are both
     // high-band, and confidence alone put GitHub near the top: the account being used every day.
     const view = await runScan(page);
-    // Unranked comes in two shapes now: "—" (not confident enough to rank) and 폐쇄 추정 (nothing to
-    // rank — §4 excludes closed accounts). Both are "no number here"; only the reason differs, and
-    // reading just the dash counted the closed row as ranked and then compared it against a score
-    // it does not have.
-    const isUnranked = (s) => s.priority.startsWith("—") || s.priority.includes("폐쇄 추정");
-    const ranked = view.services.filter((s) => !isUnranked(s));
-    expect(ranked.length).toBeGreaterThan(0);
+    const order = view.services.map((s) => s.domain);
 
-    const scoreOf = (s) => Number(/\d+/.exec(s.priority)?.[0] ?? -1);
-    for (let i = 1; i < ranked.length; i++) {
-      expect(scoreOf(ranked[i - 1])).toBeGreaterThanOrEqual(scoreOf(ranked[i]));
-    }
-    // Unranked rows sink below every ranked one instead of mixing in.
+    // Asserted as order, not as descending numbers: the score left the screen with its column, and
+    // reading it back out of the DOM was only ever possible because we happened to print it. The
+    // arithmetic is cleanup.test.js's; what this owns is that the ranking reaches the page.
+    //
+    // Spotify (28 months dormant) over GitHub (13 months, in use) is the reorder itself: by
+    // confidence alone GitHub led, because the account you open daily is the one we are surest about.
+    expect(order.indexOf("spotify.com")).toBeLessThan(order.indexOf("github.com"));
+
+    // Unranked rows sink below every ranked one instead of mixing in. Unranked has two shapes and
+    // 비고 names both: 폐쇄 추정 (§4 excludes closed accounts) and "—" (not high-band, nothing to say).
+    const isUnranked = (s) => s.remark.startsWith("—") || s.remark.includes("폐쇄 추정");
+    expect(view.services.filter((s) => !isUnranked(s)).length).toBeGreaterThan(0);
     const firstUnranked = view.services.findIndex(isUnranked);
     if (firstUnranked !== -1) {
       expect(view.services.slice(firstUnranked).every(isUnranked)).toBe(true);
@@ -400,8 +402,7 @@ test.describe("the scan a user actually sees", () => {
     // §8 stores the band beside the label because the measurement is "we said 정리 권장 and they
     // said 사용". If the client posts the label alone, that comparison is unrecoverable later — the
     // rules will have moved and nothing records what the user was actually answering.
-    const view = await runScan(page);
-    const spotify = view.services.find((s) => s.domain === "spotify.com");
+    await runScan(page);
 
     const [req] = await Promise.all([
       page.waitForRequest((r) => r.url().includes("/api/choices/") && r.method() === "PUT"),
@@ -411,9 +412,10 @@ test.describe("the scan a user actually sees", () => {
     expect(req.url()).toContain("/api/choices/spotify.com");
     const body = req.postDataJSON();
     expect(body.choice).toBe("unused");
+    // The scores are no longer on screen to compare against, which is exactly why they have to ride
+    // in the body: this request is now the only place they are written down at the moment of the
+    // answer, and §8's measurement has no other source.
     expect(typeof body.cleanupScore).toBe("number");
-    // The number on screen and the number posted are the same number.
-    expect(String(body.cleanupScore)).toBe(/\d+/.exec(spotify.priority)[0]);
     expect(body.cleanupBand).toBe("review");
     expect(body.discoveryBand).toBe("high");
   });
@@ -435,26 +437,38 @@ test.describe("the scan a user actually sees", () => {
     await expect(page.locator("#unusedRows tr", { hasText: "spotify.com" })).toHaveCount(0);
   });
 
-  test("a row we are not sure about shows a dash, not a rank of zero", async ({ page }) => {
-    // "Not ranked" and "ranked last" are different sentences. §4 scores only high-band.
+  test("a row we cannot rank says nothing rather than inventing a reason", async ({ page }) => {
+    // §4 scores high-band only, so 무신사 — a newsletter-only sender — gets no cleanup reason. The
+    // cell prints a dash instead of a rank of zero: "not ranked" and "ranked last" are different
+    // sentences, and 비고 must not manufacture the second when it means the first.
     //
-    // Excludes 폐쇄 추정 rows: they are also unranked, but for a reason the cell now names outright
-    // rather than leaving as a dash. This test is about the unnamed reason — "we are not confident
-    // enough to rank this" — so it has to pick a row that actually has it.
+    // 무신사 by name, not "the first non-high row": that used to find 옥션, whose 비고 is empty for a
+    // different reason (closed), and the test passed while checking the branch it did not name.
     const view = await runScan(page);
-    const unsure = view.services.find(
-      (s) => !s.band.startsWith("높음") && !s.priority.includes("폐쇄 추정")
-    );
-    expect(unsure).toBeTruthy();
-    expect(unsure.priority).toContain("—");
+    const musinsa = view.services.find((s) => s.domain === "musinsa.com");
+    expect(musinsa).toBeTruthy();
+    expect(musinsa.remark).toContain("—");
   });
 
-  test("an account with recent traces is never recommended, however sure we are of it", async ({ page }) => {
-    // GitHub is the highest-confidence row in this mailbox and the one most obviously in use.
-    const view = await runScan(page);
-    const gh = view.services.find((s) => s.domain === "github.com");
-    expect(gh.band).toContain("높음");
-    expect(gh.priority).not.toContain("정리 권장");
+  test("saying 사용 puts the in-use guard on the row", async ({ page }) => {
+    // §4's guard is the defence against the worst failure this product has — telling someone to
+    // close an account they use daily — and mail alone cannot see it: §3 concedes email recency is a
+    // weak proxy and §8 closed the only other source. The user's answer is the second source, and
+    // this is where it shows up.
+    //
+    // Replaces a test that claimed GitHub was "obviously in use" and asserted it was not
+    // 정리 권장. GitHub's last mail is 13 months old, so the guard never fired: the row was mild, not
+    // guarded, and the assertion passed on the wrong branch. Nothing in this mailbox is inside the
+    // 3-month window, which is why the guard needs a labelled row to be tested at all.
+    await runScan(page);
+    const before = await readTable(page);
+    expect(before.services.find((s) => s.domain === "spotify.com").remark).not.toContain("최근 사용 흔적");
+
+    await page.locator("#rows tr", { hasText: "spotify.com" }).locator('button[data-choice="keep"]').click();
+
+    const after = await readTable(page);
+    const spotify = after.services.find((s) => s.domain === "spotify.com");
+    expect(spotify.remark).toContain("최근 사용 흔적");
   });
 
   test("the layout does not jump sideways when the scrollbar arrives", async ({ page }) => {

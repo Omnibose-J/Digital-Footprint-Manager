@@ -67,11 +67,6 @@ let lastSnapshot = null;
  */
 const userVerdict = new Map(); // 'candidate'
 
-const BAND_LABEL = {
-  high: "높음",
-  review: "검토",
-  low: "낮음",
-};
 let abortScan = null;
 /**
  * Which scan the UI currently belongs to. Aborting is not enough: requests already sent land
@@ -360,44 +355,36 @@ function choiceCell(s) {
   </div>`;
 }
 
-function bandCell(s) {
-  const band = s.discoveryBand || "low";
-  const score = s.discoveryScore ?? 0;
-  const expl = s.scoreExplanation || `${score}점`;
-  // No 폐쇄 추정 badge here. cleanupCell renders it, which is where it belongs: it is an answer to
-  // "can I leave", not to "how sure are we you joined". (It sat in deletionCell until the 후보 list
-  // dropped that column; the 미사용 tab still renders it there for the same reason.)
-  return `<span class="band band-${escapeHtml(band)}">${escapeHtml(BAND_LABEL[band] || band)} ${escapeHtml(String(score))}</span><span class="score-why">${escapeHtml(expl)}</span>`;
-}
-
-const CLEANUP_LABEL = {
-  recommended: "정리 권장",
-  review: "검토",
-  keep_or_watch: "보류",
-};
-
 /**
- * The answer to "what first", which is a different question from 신뢰 and routinely points the
- * other way: the account we are surest about is often the one being used every day.
+ * 비고 — what the user needs to decide 사용/미사용, and nothing else.
  *
- * §4 scopes this to high-band rows, so a candidate we are not sure exists shows a dash instead of
- * a rank. Ordering "delete this first" above something that might not be an account would invert
- * the product, because the user works down the list.
+ * This replaced two columns, 정리 우선도 and 신뢰, which each led with our verdict (a band and a
+ * score) and put the evidence under it in small text. README §3 says the product is the other way
+ * round: "우리 판단을 믿으라고 하지 않고, 근거를 보여주고 사용자가 판단하게 한다". 90점 asks to be
+ * trusted; 28개월 방치 + 민감한 정보 is a fact they can act on.
+ *
+ * The 신뢰 evidence went with its column, deliberately. This screen asks one question — do you still
+ * use this — and "did we correctly find an account" is ours to worry about, not theirs. A row whose
+ * only evidence is a newsletter simply has nothing worth saying here; the 사용/미사용 buttons work on
+ * it exactly the same.
+ *
+ * Both scores are alive and unchanged behind this: they rank the list (verdict.js), gate §4, and are
+ * stored beside the label so the pilot can measure itself (§8). They just stopped being screen.
  */
-function cleanupCell(s) {
-  // 폐쇄 추정 lived in the 탈퇴 column until that column left the list. This is where it belonged
-  // anyway: §4 excludes likely_closed from cleanup entirely, so this cell would otherwise print a
-  // bare "—" and make the reader guess which of the three reasons for a dash applies.
+function remarkCell(s) {
+  const out = [];
+  // The two facts that override everything below them.
   if (s.likelyClosed) {
-    return `<span class="band band-closed">폐쇄 추정</span>`;
+    out.push(`<span class="band band-closed">폐쇄 추정</span>`);
+  } else if (s.inUse) {
+    out.push(`<span class="badge-inuse">최근 사용 흔적</span>`);
   }
-  if (s.cleanupScore === null || s.cleanupScore === undefined) {
-    return `<span class="cell-none" title="신뢰 '높음' 후보만 우선도를 계산합니다">—</span>`;
+  // Absent for anything §4 refuses to rank: closed, not high-band, or no actionable link.
+  if (s.cleanupWhy) {
+    out.push(`<span class="why why-cleanup">${escapeHtml(s.cleanupWhy)}</span>`);
   }
-  const band = s.cleanupBand || "keep_or_watch";
-  const inUse = s.inUse ? `<span class="badge-inuse">최근 사용 흔적</span>` : "";
-  const label = escapeHtml(CLEANUP_LABEL[band] || band);
-  return `<span class="pri pri-${escapeHtml(band)}">${label} ${escapeHtml(String(s.cleanupScore))}</span>${inUse}<span class="score-why">${escapeHtml(s.cleanupWhy || "")}</span>`;
+  if (!out.length) return `<span class="cell-none">—</span>`;
+  return out.join("");
 }
 
 /**
@@ -438,8 +425,7 @@ function rowHtml(s, i) {
   return `<td class="cell-rank">${i + 1}</td>
       <td class="cell-service">${serviceCell(s)}</td>
       <td class="cell-domain">${escapeHtml(s.registrableDomain || "")}</td>
-      <td data-label="정리 우선도">${cleanupCell(s)}</td>
-      <td data-label="신뢰">${bandCell(s)}</td>
+      <td class="cell-remark" data-label="비고">${remarkCell(s)}</td>
       <td class="cell-month" data-label="마지막 흔적">${escapeHtml(s.lastSeenMonth || "—")}</td>
       <td class="col-count" data-label="건수">${s.messageCount}</td>
       <td class="cell-choice" data-label="내 선택">${choiceCell(s)}</td>`;

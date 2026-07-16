@@ -527,10 +527,6 @@ table {
   width: 100%;
 }
 
-.w-pri {
-  width: 18%;
-}
-
 .w-rank {
   width: 44px;
 }
@@ -540,8 +536,10 @@ table {
 .w-domain {
   width: 14%;
 }
-.w-band {
-  width: 18%;
+/* Inherits what 정리 우선도 (18%) and 신뢰 (18%) used to split between them. It carries prose now,
+   not two pills, so it needs the whole width rather than half of it twice. */
+.w-remark {
+  width: 36%;
 }
 .w-month {
   width: 96px;
@@ -551,9 +549,6 @@ table {
 }
 .w-choice {
   width: 150px;
-}
-.w-action {
-  width: 140px;
 }
 
 .choice-summary {
@@ -817,27 +812,8 @@ th:first-child {
   letter-spacing: 0.01em;
 }
 
-/* Quieter than .pri on purpose. Both used the filled accent and read as equal weight, but they are
-   not equal: 정리 우선도 is the instruction and the list is sorted by it, while 신뢰 is the premise
-   that lets us make the instruction at all. Two identical pills per row also made the eye bounce
-   between them with no idea which to read first. */
-.band-high {
-  background: transparent;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-}
-
-.band-review {
-  background: transparent;
-  border: 1px solid var(--hairline);
-  color: var(--ink-quiet);
-}
-
-.band-low {
-  background: transparent;
-  color: var(--ink-faint);
-  padding-left: 0;
-}
+/* band-high / band-review / band-low went with the 신뢰 column: no score reaches the screen now, so
+   the only band left is a state. */
 
 /* The one place a semantic hue is earned: a state, not a score. */
 .band-closed {
@@ -845,38 +821,9 @@ th:first-child {
   color: var(--error);
 }
 
-/* ---------- cleanup priority ----------
-   The other question, and the one the list is now sorted by. It gets the filled accent that 신뢰
-   used to monopolise, because "deal with this first" is the instruction and "we are sure this is
-   yours" is only the premise. Still no traffic light: this ranks work, it does not grade danger. */
-
-.pri {
-  display: inline-flex;
-  align-items: center;
-  border-radius: var(--radius-pill);
-  padding: 4px var(--s3);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-}
-
-.pri-recommended {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.pri-review {
-  background: var(--accent-container);
-  color: var(--accent);
-}
-
-.pri-keep_or_watch {
-  background: transparent;
-  color: var(--ink-faint);
-  padding-left: 0;
-}
+/* The 정리 우선도 pills (.pri / .pri-recommended / .pri-review / .pri-keep_or_watch) went with their
+   column. The band they rendered was our verdict; 비고 shows the reasons behind it instead, and the
+   score they carried never reached the screen again. It still ranks the list. */
 
 /* Not a warning. It says we saw something recent, which is the reason this row is NOT being
    recommended, so it reads as a brake rather than an alarm. */
@@ -904,12 +851,20 @@ tr.row-closed td {
 
 /* The band answers "how sure", this answers "from what". It sits under, quiet, and wraps freely:
    it is the only prose in the row and it should read like prose, not like another chip. */
-.score-why {
+/* The 비고 line. Named for what it is rather than what it used to sit under: there is no score on
+   screen any more, only the reason. */
+.why {
   display: block;
   margin-top: var(--s1);
   color: var(--ink-faint);
   font-size: var(--text-xs);
   line-height: 1.45;
+}
+
+/* The reason the row is a cleanup target reads as the cell's primary text, not as a footnote —
+   it is the only thing in there the user is being asked to act on. */
+.why-cleanup {
+  color: var(--ink-quiet);
 }
 
 /* The name leads; the domain is a machine detail that identifies it. Stacking them lets the
@@ -1272,9 +1227,6 @@ tr.row-closed td {
   .table-unused .cell-action .btn-row {
     width: 100%;
     min-height: 44px;
-  }
-  .score-why {
-    display: block;
   }
 }
 

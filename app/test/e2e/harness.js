@@ -161,19 +161,21 @@ export async function readTable(page) {
       progress: document.getElementById("progress").textContent,
       meta: document.getElementById("meta").textContent,
       err: document.getElementById("err").textContent,
-      // # / 서비스 / 도메인 / 정리 우선도 / 신뢰 / 마지막 흔적 / 건수 / 내 선택
+      // # / 서비스 / 도메인 / 비고 / 마지막 흔적 / 건수 / 내 선택
+      //
       // No 탈퇴 column: the 후보 list stopped offering a withdrawal for a service the user has not
-      // said anything about yet. It lives on the 미사용 tab now — read that with readUnusedTable.
+      // said anything about yet — it lives on the 미사용 tab now.
+      // No 정리 우선도 / 신뢰 either: one 비고 column carries the reasons and neither score is on
+      // screen. The scores still exist and still rank this list; assert order here, not numbers.
       services: [...document.getElementById("rows").children].map((tr) => {
         const c = cells(tr);
         return {
           name: c[1],
           domain: c[2],
-          priority: c[3],
-          band: c[4],
-          month: c[5],
-          count: c[6],
-          choice: c[7],
+          remark: c[3],
+          month: c[4],
+          count: c[5],
+          choice: c[6],
         };
       }),
       excluded: [...document.getElementById("hiddenRows").children].map((tr) => {

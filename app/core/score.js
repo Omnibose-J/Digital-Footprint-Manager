@@ -143,7 +143,7 @@ export function computeDiscoveryScore(evidence = {}) {
   const discoveryBand = bandForScore(discoveryScore);
   contributions.sort((a, b) => b.points - a.points);
   const topTwo = contributions.filter((c) => c.points > 0).slice(0, 2);
-  const scoreExplanation = formatExplanation(discoveryScore, topTwo);
+  const scoreExplanation = formatExplanation(topTwo);
 
   return {
     discoveryScore,
@@ -205,8 +205,17 @@ function maxMonth(months) {
   return best;
 }
 
-function formatExplanation(score, topTwo) {
-  if (!topTwo.length) return `${score}점`;
-  const names = topTwo.map((c) => c.labelKo).join(" + ");
-  return `${score}점 · ${names}`;
+/**
+ * The reasons, without the number.
+ *
+ * This used to read "90점 · 이메일 인증 완료 + 비밀번호 재설정". The screen dropped the score column
+ * for a 비고 column: the number was our verdict, and the product's claim (README §3) is that it shows
+ * evidence and lets the user judge — "이메일 인증 완료 + 비밀번호 재설정" is a fact about their
+ * mailbox, "90점" is us asking to be trusted. The score still exists; it ranks the list, gates §4,
+ * and is stored beside the label (§8). It is simply not the thing to put in front of a person.
+ *
+ * Empty when nothing scored: no evidence is not "0점", it is nothing to say.
+ */
+function formatExplanation(topTwo) {
+  return topTwo.map((c) => c.labelKo).join(" + ");
 }
