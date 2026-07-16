@@ -3,7 +3,23 @@ import { loadGeminiApiKey } from "./load-local-config.js";
 export { loadGeminiApiKey };
 
 const BATCH_SIZE = 20;
-const MODEL = "gemini-1.5-flash";
+/**
+ * Pinned, not "-latest".
+ *
+ * This was gemini-1.5-flash, which Google retired. The API answered 404 for every batch, the route
+ * failed soft exactly as designed, and 비고 was simply empty — nothing was broken loudly enough to
+ * notice. That is what failing soft costs, and it is why the model name is worth a comment: the
+ * failure this classifier has already had was a dead string, not a bad answer.
+ *
+ * 2.5-flash is closed to new keys ("no longer available to new users"), so the working floor is the
+ * 3 family. A pin can die the same way and gemini-flash-latest could not — still the right trade:
+ * -latest swaps the classifier under us without a deploy, and this names services in a product whose
+ * claim is that its judgments are explainable. A 404 on a pin shows up in one request; a quietly
+ * different model does not show up at all.
+ *
+ * If this 404s again, `GET /v1beta/models?key=…` lists what the key can actually call.
+ */
+const MODEL = "gemini-3-flash-preview";
 const CATEGORIES = new Set(["가입서비스", "개인메일", "기타"]);
 
 /**
