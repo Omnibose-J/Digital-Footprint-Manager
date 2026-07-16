@@ -18,7 +18,7 @@ Find account candidates from the user's Gmail evidence, and guide the user throu
 ### Core loop
 
 1. Connect Gmail through a user-initiated OAuth flow; scan runs in the browser.
-2. Review account candidates with evidence and confidence; confirm `owned`, `not_mine`, or `unsure`.
+2. Review account candidates with evidence and confidence; label the ones still in use, so the cleanup order stops offering them.
 3. Pick accounts to clean up — the cleanup score orders the list, the user decides — then follow the deletion guide and mark completion manually.
 
 ### Required product language
@@ -131,7 +131,9 @@ Hard rules on top of the score:
 - **Authenticity gate:** an evidence mail counts only if it passes authentication, so phishing cannot mint candidates. `Authentication-Results` is a forgeable plain header, so three rules are mandatory: read **only the instance whose authserv-id is `mx.google.com`** (upstream hops can stamp their own; never take the first one found, and never read `ARC-Authentication-Results`); prefer Gmail's own `dmarc=pass` verdict with `header.from=` over re-deriving DKIM alignment by hand, which duplicates logic Gmail already ran and drifts on relaxed-vs-strict rules; and expect multiple `dkim=` entries with different `header.d=` values — Gmail checks up to five signatures, so a single-`d=` parser is wrong [S27].
 - **Negative evidence:** an account-closure/withdrawal-confirmation mail newer than the latest positive evidence marks the candidate `likely_closed` (badge, excluded from the cleanup list; user may confirm). The same detector doubles as a completion hint in the §4 status flow.
 - **Existence does not decay:** recency never changes `discoveryScore`; a 2015 signup with no mail since is still an account until closed.
-- **User loop:** `owned` overrides the score upward (confirmed); `not_mine` drops the candidate and suppresses that `service_id` for this user in future scans; `unsure` stays in `review` regardless of score. The `not_mine` rate within the `high` band is the §7 precision gate.
+- **User loop:** the user labels a candidate `in_use` or `unused`, and that answers §4's question ("clean this up first?"), never this one. **Nothing the user says moves `discoveryScore`.** A label is about the account's life, not about whether we were right to find it.
+
+  > **Amended 2026-07-16.** This row read: "`owned` overrides the score upward; `not_mine` drops the candidate and suppresses that `service_id` in future scans; `unsure` stays in `review`. The `not_mine` rate within the `high` band is the §7 precision gate." All three controls were removed from the product on 2026-07-15 (`7f0ff42`) and the owner has ruled out bringing 내 계정 아님 back. They were a second question stacked on a screen that already asks one, and the spec kept describing them for a day after they were gone — the failure §8 exists to prevent. **What goes with them: `discoveryScore` now has no user-supplied ground truth at all** (§7).
 
 ### The social-login blind spot
 
@@ -146,7 +148,7 @@ Normalization: parse sender domain and headers locally, resolve the registrable 
 ### Persisted candidate schema
 
 ```ts
-type CandidateStatus = 'owned' | 'not_mine' | 'unsure';
+type CleanupChoice = 'in_use' | 'unused';   // the only thing the user is asked; null until they answer
 type DiscoveryBand = 'high' | 'review' | 'low';
 
 interface AccountCandidate {
@@ -160,7 +162,7 @@ interface AccountCandidate {
   lastSeenMonth: string;  // YYYY-MM, non-marketing evidence only
   discoveryScore: number;
   discoveryBand: DiscoveryBand;
-  userStatus: CandidateStatus;
+  cleanupChoice: CleanupChoice | null;   // null = not labelled yet
   createdAt: string;
   updatedAt: string;
 }
@@ -293,17 +295,21 @@ Do not introduce an LLM into discovery. Start with deterministic signals, the en
 | Gmail access token | Browser memory, current session | Clear on disconnect/tab close; never log or persist |
 | Message subject/sender/date | Scan memory, max 30 minutes | Never transmit to backend |
 | Normalized candidates and decisions | While product account exists | Per-item delete and full export |
+| Cleanup labels (사용/미사용) + the score we showed when the user labelled | **Pilot only** — this table is dropped at public release unless §8 says otherwise | The owner reads individual rows, not just aggregates (§8). Keyed on Google `sub`, never on the address |
 | Cleanup status | While product account exists | Dates and method only |
 | Product-account deletion | Primary DB within 24 hours | Verify the DB provider expires backups within 30 days before launch |
 | Security logs | 30 days | No email, subject, token, or message identifier |
 
 Controls: just-in-time disclosure before OAuth; least privilege and incremental authorization; TLS and encryption at rest; CSP `default-src 'none'`, with `connect-src` limited to the app, Google OAuth, the Gmail API, and Google Analytics, and `script-src`/`img-src` additionally admitting Google Tag Manager — the analytics origins were added when GA shipped (§8), so this list is what the browser may reach, not a claim that it cannot reach GA; no mailbox-derived identifier in analytics **except the registrable domain on the cleanup-choice events** (`mark_delete`, `mark_keep`, `click_unsubscribe`) — no service name, no sender address, no subject, ever; enforced by a key-and-value allowlist and its tests, with `domain` the one key admitted by shape instead of by value, and only on those events (§8). Aggregate counts and those domains leave knowingly (§8); automated secret/PII redaction in logs and errors.
 
+**The pilot's label table is the one place the owner can read a named user's service list, and it is deliberate (§8).** Everything above bounds what leaves the browser; this bounds what we do with what the user chose to tell us. It is scoped by time, not by promise: it exists to measure the §7 cleanup gate, it is invited-pilot only, and the exit is dropping the table — not a policy we ask anyone to trust. Two rules hold while it is here: `user_id` is the Google `sub` and never the address, so the table cannot be joined to a mailbox by anyone who steals it alone; and no mail-derived field beyond the registrable domain enters it — no subject, no sender address, no message id (§3's forbidden list applies here unchanged).
+
 ## 7. Validation Gates
 
 - Gmail connect completion >= 60%; below 40%, stop scaling and test trust copy or manual import.
 - Time to first 10 high-confidence candidates <= 5 minutes. This measures progressive rendering, not scan completion — a full scan is quota-bound near 4 minutes on its own (§3).
-- High-confidence precision >= 85% in pilot (false positives <= 10% at release); below 80%, stop adding features and repair evidence rules.
+- **Cleanup precision:** of the items shown `recommended`, <= 15% come back labelled `in_use`. This is the pilot's live gate — it is the one the label table exists to measure (§8), and a miss means the dormancy axis is wrong, not that the user is.
+- High-confidence precision >= 85% in pilot (false positives <= 10% at release); below 80%, stop adding features and repair evidence rules. **Unmeasurable as written since 2026-07-15:** this was defined as the `not_mine` rate, and that control is gone (§3). A false positive here is "we listed an account you never had", and nothing on the screen asks that question any more — 사용/미사용 answers a different one. Either this gate gets an instrument before public release or it gets struck; it must not stay as a number nobody computes.
 - At least 25% of result viewers start one cleanup action.
 - Any raw-mail or credential leak is a release blocker.
 - Gmail restricted-scope verification is complete before public release; it is a gate, not a calendar promise [S3].
@@ -454,6 +460,22 @@ Its architecture also collides with §5 independently of the credential question
 **Rejected:** hashing the domain (a hash of a registrable domain is a lookup table with ~2,500 entries — it obscures the value from a reader, not from anyone who wants it, and buys the reporting nothing since the owner needs the name to act on it). Sending a catalog `service_id` instead (identical disclosure, and it silently drops every non-catalogued service, which is the long tail the question is about). Leaving §6 as written and keeping the reasoning in the code (the exact mistake the entry above was written to stop).
 
 **Status:** Active — supersedes the "not a domain" clause of the entry above; every other clause of it stands unchanged.
+
+### Decision: The pilot keeps individual cleanup labels, and says when it stops - 2026-07-16
+
+**Context:** 사용/미사용 shipped to the list and landed in `localStorage`, which §8's storage decision had already ruled out — a re-scan rebuilds candidates but cannot rebuild what the user told us. Moving it to Postgres (Supabase) is that decision being carried out, not a new one. What *is* new: the owner reads individual rows — this user, these services, these labels — not aggregates only.
+
+**Why the label is worth storing at all.** §3 concedes the product's largest hole in writing: email recency is a weak proxy for use, "a service used daily that sends no mail looks dormant, which is exactly the input that could make the product recommend deleting an account the user actively relies on — the worst failure mode." §8 then closed the one second source (no extension). §4's in-use guard has covered this alone since, and it only sees mail. **The user saying "I still use this" is the only other evidence that exists**, and §4 already anticipated it: "the guard is a floor, not the whole defense: the review UI asks the user to confirm disuse rather than asserting it." This stores that confirmation instead of discarding it at tab close.
+
+**Why individual rows, not aggregates.** The measurement is `cleanup_band = 'recommended'` AND `choice = 'in_use'` — a cleanup false positive, which §7 has no gate for because it has never had data. An aggregate answers "12% wrong" and stops there. Fixing it needs the *which*: whether one dormancy threshold is off, or a category is misweighted, or a handful of mail-silent services (은행 앱, 사내 도구) drive the whole number. That question is per-row by construction. The row also stores the score **as it was shown** — `cleanup_score`, `cleanup_band`, `discovery_score` — because the label means nothing once the rules that produced it have moved, and they will.
+
+**What it costs, stated plainly:** for pilot users, the owner can see a list of services a named person has accounts with and what they said about each. Nothing mail-derived beyond the registrable domain is in there — no subject, no address, no message id — and `user_id` is the Google `sub`, so the table alone does not name a mailbox. But "does not name" is not "cannot be joined": we run the login that mints that `sub`. This is the strongest disclosure in the product, stronger than the `domain` on the GA events above, because it persists and it is keyed to a person.
+
+**The exit is a DROP TABLE, and that is the point.** This is invited-pilot instrumentation, not a feature: it is here to answer whether the cleanup score is right, and a product that already knew that would not collect it. **Remove it when either is true — the §7 cleanup gate is measured and the rules are fixed, or public release arrives (restricted-scope verification asks what we store and why, and "we are still checking whether our score works" does not survive that question).** Whoever removes it should expect `user_service_choice`, `/api/choices`, and the personalization read in `cleanup.js` to be the whole surface; the labels feed no model and no other table, deliberately, so that this stays a delete rather than an unwind.
+
+**Rejected:** aggregate-only (cannot locate the failing rule — see above). Hashing `user_id` (we operate the identity provider that issues it; a hash obscures the value from a reader and from nobody else, and buys the pilot no ability it lacks). Keeping it in `localStorage` (the storage decision above, unchanged: Safari evicts on a 7-day no-interaction timer, and a device switch is total loss — losing labels silently is worse than not having them, because the list returns looking complete). Cross-user learning — "many users call X in-use, so suppress X's dormancy for everyone" (a pilot's sample cannot carry it, and it converts a per-user correction into a global rule with no one to check it; revisit only with a measured error corpus, which is what this table is for).
+
+**Status:** Active — **pilot only.** Not a standing capability. Revisit at the earlier of the two exits above.
 
 ### Prior decisions (2026-07-15, all Active; full text in v1 archive)
 
