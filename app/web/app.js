@@ -86,7 +86,6 @@ let sessionEmail = "";
 /** The Gmail account the scan actually read, from users/me/profile. Not sessionEmail. */
 let scannedAccount = "";
 
-const DONE_STORAGE_KEY = "dfm-unsubscribe-done-v1";
 /**
  * @type {Record<string, "keep"|"delete">} domain -> choice (keep=사용, delete=미사용)
  *
@@ -97,8 +96,18 @@ const DONE_STORAGE_KEY = "dfm-unsubscribe-done-v1";
  * promises to remember quietly did not persist.
  */
 let cleanupChoices = {};
-/** @type {Record<string, true>} domain -> completed unsubscribe */
-let doneByDomain = loadDoneByDomain();
+/**
+ * @type {Record<string, { withdrawnAt: string|null, unsubscribedAt: string|null }>}
+ *
+ * 탈퇴 완료 and 구독해지 완료, which are two facts and not one: unsubscribing does not close an
+ * account and closing one does not stop mail already queued (§4's distinction warnings say exactly
+ * this on screen, so one checkbox for both would have the data model contradicting the copy).
+ *
+ * Server-owned for the same reason as the labels above, and more so — this is the one thing a
+ * re-scan can never reconstruct. It is not "did we find mail", it is "did this person do a thing".
+ * The timestamps come from the server; nothing here ever sends one.
+ */
+let cleanupStatus = {};
 /** @type {"all"|"unused"} */
 let activeTab = "all";
 
@@ -106,14 +115,19 @@ let activeTab = "all";
 const SPEC_TO_CHOICE = { in_use: "keep", unused: "delete" };
 
 /**
- * Load this user's labels. Returns {} for a signed-out visitor, which is the correct empty answer
- * and not a failure — the labels are keyed to a session that does not exist yet.
+ * Load this user's labels and their completion status in one call.
+ *
+ * Returns empty for a signed-out visitor, which is the correct empty answer and not a failure — the
+ * rows are keyed to a session that does not exist yet.
+ *
+ * @returns {Promise<{ choices: Record<string,"keep"|"delete">, status: Record<string, any> }>}
  */
 async function fetchChoices() {
+  const empty = { choices: {}, status: {} };
   let data;
   try {
     const res = await fetch("/api/choices");
-    if (res.status === 401) return {};
+    if (res.status === 401) return empty;
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     data = await res.json();
   } catch (e) {
@@ -122,40 +136,21 @@ async function fetchChoices() {
     // their earlier answers still exist on the server.
     err.textContent = "저장된 선택을 불러오지 못했습니다. 새로고침하면 다시 시도합니다.";
     console.warn("[choices] load failed", e);
-    return {};
+    return empty;
   }
-  const out = {};
+  const choices = {};
+  const status = {};
   for (const [domain, value] of Object.entries(data?.choices || {})) {
     const d = normalizeDomain(domain);
     const c = SPEC_TO_CHOICE[value?.choice];
-    if (d && c) out[d] = c;
+    if (!d || !c) continue;
+    choices[d] = c;
+    status[d] = {
+      withdrawnAt: value?.withdrawnAt ?? null,
+      unsubscribedAt: value?.unsubscribedAt ?? null,
+    };
   }
-  return out;
-}
-
-function loadDoneByDomain() {
-  try {
-    const raw = localStorage.getItem(DONE_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
-    const out = {};
-    for (const [domain, value] of Object.entries(parsed)) {
-      const d = normalizeDomain(domain);
-      if (d && value) out[d] = true;
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
-
-function saveDoneByDomain() {
-  try {
-    localStorage.setItem(DONE_STORAGE_KEY, JSON.stringify(doneByDomain));
-  } catch {
-    /* ignore */
-  }
+  return { choices, status };
 }
 
 function normalizeDomain(domain) {
@@ -187,13 +182,10 @@ async function setChoice(domain, choice, item) {
   if (!d || (choice !== "keep" && choice !== "delete")) return;
 
   const previousChoice = cleanupChoices[d];
-  const previousDone = doneByDomain[d];
   cleanupChoices[d] = choice;
-  // Leaving the unused list clears the done check for that domain.
-  if (choice !== "delete" && doneByDomain[d]) {
-    delete doneByDomain[d];
-    saveDoneByDomain();
-  }
+  // Flipping back to 사용 no longer wipes the completion. It used to, when 완료 was a browser flag
+  // with no meaning outside this tab — but "나는 이 서비스를 탈퇴했다" is a fact about something the
+  // user did, and it does not stop being true because they later re-labelled the row.
 
   try {
     const res = await fetch(`/api/choices/${encodeURIComponent(d)}`, {
@@ -213,27 +205,61 @@ async function setChoice(domain, choice, item) {
     // undoing a click for: the user would never know to answer it again.
     if (previousChoice) cleanupChoices[d] = previousChoice;
     else delete cleanupChoices[d];
-    if (previousDone) {
-      doneByDomain[d] = previousDone;
-      saveDoneByDomain();
-    }
     err.textContent = "선택을 저장하지 못했습니다. 다시 눌러 주세요.";
     console.warn("[choices] save failed", e);
     if (lastSnapshot) renderSnapshot(lastSnapshot);
   }
 }
 
-function isDone(domain) {
-  const d = normalizeDomain(domain);
-  return Boolean(d && doneByDomain[d]);
+/** @param {"withdrawn"|"unsubscribed"} field */
+function isStatusOn(domain, field) {
+  const st = cleanupStatus[normalizeDomain(domain)];
+  return Boolean(field === "withdrawn" ? st?.withdrawnAt : st?.unsubscribedAt);
 }
 
-function setDone(domain, done) {
+const STATUS_FIELD_KEY = { withdrawn: "withdrawnAt", unsubscribed: "unsubscribedAt" };
+
+/**
+ * Mark 탈퇴 완료 / 구독해지 완료, then persist it.
+ *
+ * Optimistic like the label, and rolled back the same way — but this one matters more. §8's storage
+ * decision turns on exactly this field: "a re-scan rebuilds the candidate list but cannot rebuild
+ * cleanup status — which deletion requests the user already filed is human-generated and
+ * irreplaceable". A checkbox that looks ticked and is not would be silently telling them a job is
+ * done that they will have to do again.
+ *
+ * The optimistic timestamp is a placeholder for "on", never a value: the server stamps the real time
+ * and the response overwrites this. Nothing on screen reads it, only its presence.
+ *
+ * @param {"withdrawn"|"unsubscribed"} field
+ */
+async function setStatus(domain, field, on) {
   const d = normalizeDomain(domain);
-  if (!d) return;
-  if (done) doneByDomain[d] = true;
-  else delete doneByDomain[d];
-  saveDoneByDomain();
+  const key = STATUS_FIELD_KEY[field];
+  if (!d || !key) return;
+
+  const previous = cleanupStatus[d] || { withdrawnAt: null, unsubscribedAt: null };
+  cleanupStatus[d] = { ...previous, [key]: on ? "pending" : null };
+  renderUnusedList();
+
+  try {
+    const res = await fetch(`/api/choices/${encodeURIComponent(d)}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: on }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    cleanupStatus[d] = {
+      withdrawnAt: data?.withdrawnAt ?? null,
+      unsubscribedAt: data?.unsubscribedAt ?? null,
+    };
+  } catch (e) {
+    cleanupStatus[d] = previous;
+    err.textContent = "완료 표시를 저장하지 못했습니다. 다시 눌러 주세요.";
+    console.warn("[status] save failed", e);
+  }
+  renderUnusedList();
 }
 
 function updateChoiceSummary(services) {
@@ -278,7 +304,9 @@ function deletionCell(s) {
 
 function unusedRowHtml(s, i) {
   const domain = normalizeDomain(s.registrableDomain);
-  const done = isDone(domain);
+  const d = escapeHtml(domain);
+  // Two checkboxes, not one. §4 warns on screen that unsubscribing does not close an account; a
+  // single 완료 would say the opposite in the only place the user actually records what they did.
   return `<td class="cell-rank">${i + 1}</td>
       <td class="cell-service">${serviceCell(s)}</td>
       <td class="cell-domain">${escapeHtml(domain)}</td>
@@ -286,8 +314,16 @@ function unusedRowHtml(s, i) {
       <td class="cell-action">${deletionCell(s)}</td>
       <td class="cell-done" data-label="완료">
         <label class="done-check">
-          <input type="checkbox" data-done-domain="${escapeHtml(domain)}" ${done ? "checked" : ""} />
-          <span>완료</span>
+          <input type="checkbox" data-done="withdrawn" data-domain="${d}" ${
+            isStatusOn(domain, "withdrawn") ? "checked" : ""
+          } />
+          <span>탈퇴</span>
+        </label>
+        <label class="done-check">
+          <input type="checkbox" data-done="unsubscribed" data-domain="${d}" ${
+            isStatusOn(domain, "unsubscribed") ? "checked" : ""
+          } />
+          <span>구독해지</span>
         </label>
       </td>`;
 }
@@ -297,14 +333,16 @@ function renderUnusedList() {
   const list = unusedServicesFromSnapshot(lastSnapshot);
   unusedRows.innerHTML = list
     .map((s, i) => {
-      const trClass = isDone(s.registrableDomain) ? ' class="row-done"' : "";
+      // 탈퇴, not 구독해지, dims the row: this tab exists to get people out of services, and
+      // unsubscribing is housekeeping they may do without ever leaving.
+      const trClass = isStatusOn(s.registrableDomain, "withdrawn") ? ' class="row-done"' : "";
       return `<tr${trClass}>${unusedRowHtml(s, i)}</tr>`;
     })
     .join("");
 
-  const doneCount = list.filter((s) => isDone(s.registrableDomain)).length;
+  const doneCount = list.filter((s) => isStatusOn(s.registrableDomain, "withdrawn")).length;
   if (unusedSummary) {
-    unusedSummary.textContent = `미사용 ${list.length}개 · 완료 ${doneCount}개`;
+    unusedSummary.textContent = `미사용 ${list.length}개 · 탈퇴 완료 ${doneCount}개`;
   }
   unusedEmpty?.classList.toggle("hidden", list.length > 0);
 }
@@ -654,13 +692,16 @@ async function refreshMe() {
   const data = await res.json();
   if (data.loggedIn) {
     setLoggedInUI(data);
-    cleanupChoices = await fetchChoices();
+    const loaded = await fetchChoices();
+    cleanupChoices = loaded.choices;
+    cleanupStatus = loaded.status;
   } else {
     setLoggedOutUI();
     // Signing out drops the labels from memory, not just from the screen. They belong to a session,
     // and the next person at this browser must not inherit the last one's answers — the same rule
     // the scan already follows for its table.
     cleanupChoices = {};
+    cleanupStatus = {};
   }
   if (lastSnapshot) renderSnapshot(lastSnapshot);
   return data;
@@ -823,11 +864,13 @@ unusedRows?.addEventListener("click", (ev) => {
 });
 
 unusedRows?.addEventListener("change", (ev) => {
-  const input = ev.target.closest?.("input[data-done-domain]");
+  const input = ev.target.closest?.("input[data-done]");
   if (!input) return;
-  const domain = input.getAttribute("data-done-domain") || "";
-  setDone(domain, Boolean(input.checked));
-  renderUnusedList();
+  const field = input.getAttribute("data-done");
+  const domain = input.getAttribute("data-domain") || "";
+  if (field !== "withdrawn" && field !== "unsubscribed") return;
+  // setStatus re-renders on both the optimistic write and the server's answer.
+  setStatus(domain, field, Boolean(input.checked));
 });
 
 tabAll?.addEventListener("click", () => setActiveTab("all"));

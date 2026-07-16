@@ -619,6 +619,15 @@ table {
   height: 16px;
 }
 
+/* Two checkboxes now (탈퇴 / 구독해지). Stacked rather than inline: side by side at this width they
+   wrapped mid-label, and a wrapped "구독" / "해지" reads as a third option. */
+.cell-done {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
 tr.row-done td {
   opacity: 0.72;
 }

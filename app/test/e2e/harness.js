@@ -101,6 +101,7 @@ export async function installFakeGoogle(page, { account = "tester@gmail.com", me
    * choices.test.js; what these tests own is the screen: that a click reaches the API with the
    * scores we were showing, and that what comes back on load lands on the right rows.
    */
+  const STAMP = "2026-07-16T00:00:00.000Z";
   const labels = new Map();
   await page.route("**/api/choices", (route) =>
     route.fulfill({ json: { choices: Object.fromEntries(labels) } })
@@ -110,7 +111,8 @@ export async function installFakeGoogle(page, { account = "tester@gmail.com", me
     const domain = decodeURIComponent(req.url().split("/api/choices/")[1] || "");
     if (req.method() === "PUT") {
       const body = req.postDataJSON() || {};
-      labels.set(domain, { choice: body.choice, labeledAt: "2026-07-16T00:00:00.000Z" });
+      const prev = labels.get(domain) || {};
+      labels.set(domain, { ...prev, choice: body.choice, labeledAt: STAMP });
       return route.fulfill({ json: { ok: true } });
     }
     if (req.method() === "DELETE") {
@@ -118,6 +120,29 @@ export async function installFakeGoogle(page, { account = "tester@gmail.com", me
       return route.fulfill({ json: { ok: true } });
     }
     return route.fulfill({ status: 405, json: {} });
+  });
+
+  // SOW 002 §3a. The server stamps the time; the client only ever sends booleans, so this returns a
+  // fixed stamp rather than echoing anything the page sent.
+  await page.route("**/api/choices/*/status", (route) => {
+    const req = route.request();
+    const domain = decodeURIComponent(
+      (req.url().split("/api/choices/")[1] || "").replace(/\/status.*$/, "")
+    );
+    const row = labels.get(domain);
+    // §3a: a completion for a domain with no label row is the client being out of sync.
+    if (!row) return route.fulfill({ status: 404, json: {} });
+    const body = req.postDataJSON() || {};
+    if ("withdrawn" in body) row.withdrawnAt = body.withdrawn ? STAMP : null;
+    if ("unsubscribed" in body) row.unsubscribedAt = body.unsubscribed ? STAMP : null;
+    labels.set(domain, row);
+    return route.fulfill({
+      json: {
+        ok: true,
+        withdrawnAt: row.withdrawnAt ?? null,
+        unsubscribedAt: row.unsubscribedAt ?? null,
+      },
+    });
   });
 
   // E2E must not call the real Gemini API. Empty results = safe rule-only fallback.
