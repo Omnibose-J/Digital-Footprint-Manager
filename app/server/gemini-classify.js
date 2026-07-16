@@ -2,7 +2,18 @@ import { loadGeminiApiKey } from "./load-local-config.js";
 
 export { loadGeminiApiKey };
 
-const BATCH_SIZE = 20;
+/**
+ * 50, not 20. The limit that binds is requests per minute, not tokens: a real mailbox is ~63 senders,
+ * and at 20 that was four requests fired back to back — 429 every time, and an empty 비고 for the
+ * whole scan. Two requests fit under the free tier; the payload is names and four subjects each, so
+ * the model has room to spare either way.
+ */
+const BATCH_SIZE = 50;
+/** 429 is a wait, not a failure. This runs after the list renders, so seconds here cost nothing. */
+const RETRY_MAX = 3;
+const RETRY_BASE_MS = 4000;
+/** Gap between batches: the free tier counts requests per minute, so back-to-back is what trips it. */
+const BATCH_GAP_MS = 3000;
 /**
  * Pinned, not "-latest".
  *
@@ -31,24 +42,30 @@ export async function classifySendersWithGemini(senders) {
   const byKey = {};
 
   if (!apiKey) {
-    console.warn("[gemini] GEMINI_API_KEY missing in src/lib/config.ts");
+    console.warn("[gemini] GEMINI_API_KEY missing (.env or src/lib/config.ts)");
     return byKey;
   }
 
   const list = Array.isArray(senders) ? senders : [];
   for (let i = 0; i < list.length; i += BATCH_SIZE) {
     const batch = list.slice(i, i + BATCH_SIZE);
+    // Spaced, not just retried. The per-minute limit counts requests, so firing the second batch the
+    // instant the first returns is what earns the 429 that the retry then has to wait out anyway.
+    if (i > 0) await sleep(BATCH_GAP_MS);
     const batchResults = await classifyBatch(apiKey, batch);
     Object.assign(byKey, batchResults);
   }
   return byKey;
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 /**
  * @param {string} apiKey
  * @param {{ displayName?: string, names?: string[], email?: string, key?: string }[]} batch
+ * @param {number} [attempt]
  */
-async function classifyBatch(apiKey, batch) {
+async function classifyBatch(apiKey, batch, attempt = 0) {
   const out = {};
   const payload = batch.map((s) => {
     // Every name this domain sent under, not just the one the table prints. A relay's domain carries
@@ -121,6 +138,16 @@ ${JSON.stringify(payload)}`;
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
+      // 429 is the free tier's per-minute limit, and it is the failure this actually has: a real
+      // mailbox is 63 senders, which went out as four requests back to back and tripped it every
+      // time. Retried with a wait, because the alternative is an empty 비고 for the whole scan —
+      // and this runs after the list is already on screen, so a few seconds cost nothing.
+      if (res.status === 429 && attempt < RETRY_MAX) {
+        const waitMs = RETRY_BASE_MS * (attempt + 1);
+        console.warn(`[gemini] 429, retrying in ${waitMs}ms (attempt ${attempt + 1}/${RETRY_MAX})`);
+        await sleep(waitMs);
+        return classifyBatch(apiKey, batch, attempt + 1);
+      }
       console.warn("[gemini] API error", res.status, errText.slice(0, 300));
       return out;
     }
