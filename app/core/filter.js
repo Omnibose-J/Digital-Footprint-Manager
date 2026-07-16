@@ -288,6 +288,9 @@ function emptyScoreBuckets() {
     authMonths: new Set(),
     transactionMonths: new Set(),
     notificationMonths: new Set(),
+    // Scores nothing. It belongs on this side of the split because this is the authenticated
+    // evidence, and §3's gate covers negative evidence too — see computeLikelyClosed.
+    closureMonths: new Set(),
     hasMarketing: false,
   };
 }
@@ -460,6 +463,8 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
         sb.transactionMonths.add(month);
       } else if (family === "notification" && month) {
         sb.notificationMonths.add(month);
+      } else if (family === "closure" && month) {
+        sb.closureMonths.add(month);
       } else if (family === "marketing") {
         sb.hasMarketing = true;
       }
@@ -518,7 +523,7 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
       notificationMonths: [...sb.notificationMonths],
       hasMarketing: sb.hasMarketing,
     });
-    const likelyClosed = computeLikelyClosed(families);
+    const likelyClosed = computeLikelyClosed(families, [...sb.closureMonths]);
     const links = linkFields(svc.registrableDomain, hiddenRule, null, rules);
     return {
       key: svc.key, // stable identity across snapshots; registrableDomain is not unique

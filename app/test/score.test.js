@@ -136,23 +136,57 @@ describe("SOW 004 R3 discoveryScore", () => {
 });
 
 describe("SOW 004 R5 likely_closed", () => {
+  // The authenticated closure months arrive as the second argument. families carries every closure
+  // mail either way, so passing only families is what a forged mail looks like from here.
   it("closure newer than positive → likely_closed", () => {
     assert.equal(
-      computeLikelyClosed({
-        signup: { months: ["2023-01"], count: 1 },
-        closure: { months: ["2024-06"], count: 1 },
-      }),
+      computeLikelyClosed(
+        {
+          signup: { months: ["2023-01"], count: 1 },
+          closure: { months: ["2024-06"], count: 1 },
+        },
+        ["2024-06"]
+      ),
       true
     );
   });
 
   it("closure older than positive → not likely_closed", () => {
     assert.equal(
-      computeLikelyClosed({
-        signup: { months: ["2024-08"], count: 1 },
-        closure: { months: ["2023-01"], count: 1 },
-      }),
+      computeLikelyClosed(
+        {
+          signup: { months: ["2024-08"], count: 1 },
+          closure: { months: ["2023-01"], count: 1 },
+        },
+        ["2023-01"]
+      ),
       false
+    );
+  });
+
+  it("a closure mail that failed the gate cannot close the account (§3)", () => {
+    assert.equal(
+      computeLikelyClosed(
+        {
+          signup: { months: ["2023-01"], count: 1 },
+          closure: { months: ["2024-06"], count: 1 },
+        },
+        []
+      ),
+      false
+    );
+  });
+
+  it("an authenticated closure still closes when a forged one sits beside it", () => {
+    assert.equal(
+      computeLikelyClosed(
+        {
+          signup: { months: ["2023-01"], count: 1 },
+          closure: { months: ["2024-06", "2024-09"], count: 2 },
+        },
+        ["2024-06"]
+      ),
+      true
     );
   });
 });

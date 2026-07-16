@@ -647,6 +647,33 @@ describe("SOW 004 filter integration (gate + score + verdict)", () => {
     assert.equal(agg.snapshot().services[0].likelyClosed, false);
   });
 
+  it("forged closure cannot close an account, but still counts as evidence (R2/G2)", () => {
+    const agg = createAggregator({ selfEmail: "me@gmail.com" });
+    agg.add(
+      msg({
+        from: "S <n@brand-shop.com>",
+        subject: "회원가입이 완료되었습니다",
+        internalDate: String(Date.UTC(2023, 0, 10)),
+        headers: { authenticationResults: passArs("brand-shop.com") },
+      })
+    );
+    agg.add(
+      msg({
+        from: "Phish <n@brand-shop.com>",
+        subject: "회원탈퇴가 완료되었습니다",
+        internalDate: String(Date.UTC(2024, 5, 10)),
+        headers: { authenticationResults: failArs("brand-shop.com") },
+      })
+    );
+    const svc = agg.snapshot().services[0];
+    // §3: closure is negative evidence, and evidence counts only when it authenticates. A spoofed
+    // withdrawal mail otherwise hides a real account from the cleanup list entirely (§4).
+    assert.equal(svc.likelyClosed, false);
+    // The mail is still evidence and still moves recency — the gate never took that away (R2/G2).
+    assert.equal(svc.families.closure.count, 1);
+    assert.equal(svc.lastSeenMonth, "2024-06");
+  });
+
 
 });
 

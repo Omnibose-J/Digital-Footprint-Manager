@@ -163,9 +163,19 @@ function bandForScore(score) {
 /**
  * Closure newer than latest positive evidence → likely_closed (R5).
  * Positive = signup, auth, transaction, notification, unknown (not marketing, not closure).
+ *
+ * Closure months arrive already gated, separately from `families`. §3 binds the authenticity rule
+ * to evidence and names closure mail negative evidence, so it binds here too: one spoofed
+ * withdrawal mail must not close a real account, which §4 then drops from the cleanup list
+ * entirely. `families.closure` still carries every closure mail because unauthenticated evidence
+ * keeps counting for recency (R2/G2) — the gate narrows the conclusion, not the record.
+ *
+ * Positive months stay ungated deliberately. Widening what reads as "still alive" can only keep a
+ * candidate on the list, never hide one, so an unauthenticated positive fails in the safe
+ * direction; an unauthenticated closure does not.
  */
-export function computeLikelyClosed(families = {}) {
-  const closureMonths = families.closure?.months || [];
+export function computeLikelyClosed(families = {}, authenticatedClosureMonths = []) {
+  const closureMonths = authenticatedClosureMonths;
   if (!closureMonths.length) return false;
   const latestClosure = maxMonth(closureMonths);
   if (!latestClosure) return false;
