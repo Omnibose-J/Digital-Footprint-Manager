@@ -10,6 +10,9 @@ token.json
 ~$*
 *.local
 
+# Local-only Gemini API key (never commit)
+src/lib/config.ts
+
 # Playwright
 app/test-results/
 app/playwright-report/

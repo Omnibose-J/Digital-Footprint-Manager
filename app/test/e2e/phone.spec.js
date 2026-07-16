@@ -64,67 +64,50 @@ test.describe("the phone", () => {
     });
   }
 
-  test("390px: the withdraw button is reachable without scrolling the table sideways", async ({
+  test("390px: the cancel link is reachable without scrolling the table sideways", async ({
     page,
   }) => {
     await openAt(page, PHONE);
     await runScan(page);
-    const btn = page.locator("#rows tr", { hasText: "spotify.com" }).getByRole("button");
+    const btn = page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]');
     await expect(btn).toBeVisible();
 
     // Visible to Playwright is not visible to a person: an element inside an overflow-x container
     // can sit past the right edge and still report visible. This asks where it actually is.
     const box = await btn.boundingBox();
-    expect(box, "the withdraw button has no box on a phone").toBeTruthy();
-    expect(box.x + box.width, "the withdraw button sits off the right edge of the phone").toBeLessThanOrEqual(
+    expect(box, "the cancel link has no box on a phone").toBeTruthy();
+    expect(box.x + box.width, "the cancel link sits off the right edge of the phone").toBeLessThanOrEqual(
       PHONE.width
     );
   });
 
-  test("390px: the guide modal fits, and its route link is tappable", async ({ page }) => {
+  test("390px: the cancel link is tappable and readable", async ({ page }) => {
     await openAt(page, PHONE);
     await runScan(page);
-    await page.locator("#rows tr", { hasText: "spotify.com" }).getByRole("button").click();
 
-    const dialog = page.locator(".modal-dialog");
-    await expect(dialog).toBeVisible();
-    const box = await dialog.boundingBox();
-    expect(box.width).toBeLessThanOrEqual(PHONE.width);
-    expect(box.x).toBeGreaterThanOrEqual(0);
-
-    // 44px is Apple's minimum touch target and the one Android's 48dp rounds to. A link people are
-    // meant to follow to actually close an account should not need a careful tap.
-    const link = page.locator('#guideBody a[data-out="route"]');
+    const link = page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]');
+    await expect(link).toBeVisible();
     const linkBox = await link.boundingBox();
-    expect(linkBox.height, "route link is smaller than a fingertip").toBeGreaterThanOrEqual(44);
+    expect(linkBox.height, "cancel link is smaller than a fingertip").toBeGreaterThanOrEqual(44);
     expect(linkBox.x + linkBox.width).toBeLessThanOrEqual(PHONE.width);
 
-    // The first version of this test passed while the label was invisible: .guide-section a beats
-    // .btn-primary on specificity, so the text was painted accent-on-accent. Size and position say
-    // nothing about whether a person can read the thing.
     const paint = await link.evaluate((el) => {
       const cs = getComputedStyle(el);
       return { color: cs.color, background: cs.backgroundColor, text: el.textContent.trim() };
     });
     expect(paint.text.length).toBeGreaterThan(0);
-    expect(paint.color, "the route button's label is the same colour as the button").not.toBe(
+    expect(paint.color, "the cancel link's label is the same colour as the button").not.toBe(
       paint.background
     );
   });
 
-  test("390px: the template is readable without a horizontal scrollbar of its own", async ({
-    page,
-  }) => {
+  test("390px: the service name link stays on screen", async ({ page }) => {
     await openAt(page, PHONE);
     await runScan(page);
-    await page.locator("#rows tr", { hasText: "spotify.com" }).getByRole("button").click();
-    await page.locator("summary", { hasText: "개인정보 삭제 요청문" }).click();
-
-    // <pre> does not wrap by default, and this one holds Korean sentences long enough to run off
-    // any phone. It is the thing the user is meant to copy and send.
-    const pre = page.locator("#guideTemplateText");
-    await expect(pre).toBeVisible();
-    const overflow = await pre.evaluate((el) => el.scrollWidth - el.clientWidth);
-    expect(overflow, "the request template scrolls sideways inside the modal").toBeLessThanOrEqual(1);
+    const link = page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="list"]');
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("href", "https://spotify.com");
+    const box = await link.boundingBox();
+    expect(box.x + box.width).toBeLessThanOrEqual(PHONE.width);
   });
 });

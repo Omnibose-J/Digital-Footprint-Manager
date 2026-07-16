@@ -44,6 +44,18 @@ describe("analytics never carries anything read out of the mailbox", () => {
     assert.deepEqual(ev.params, { band: "high" });
   });
 
+  it("cleanup events may carry domain (owner-requested)", async () => {
+    const { track, events } = await loadAnalytics();
+    track("mark_delete", { domain: "github.com" });
+    track("mark_keep", { domain: "vercel.com" });
+    track("click_unsubscribe", { domain: "spotify.com" });
+    assert.deepEqual(events(), [
+      { name: "mark_delete", params: { domain: "github.com" } },
+      { name: "mark_keep", params: { domain: "vercel.com" } },
+      { name: "click_unsubscribe", params: { domain: "spotify.com" } },
+    ]);
+  });
+
   it("keeps counts and booleans, which describe the product and not the user", async () => {
     const { track, events } = await loadAnalytics();
     track("scan_completed", { messages: 811, candidates: 62, high: 2, errors: 0, catalogued: true });

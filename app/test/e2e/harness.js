@@ -92,6 +92,11 @@ export async function installFakeGoogle(page, { account = "tester@gmail.com", me
     route.fulfill({ json: { loggedIn: true, email: account, name: "테스터" } })
   );
 
+  // E2E must not call the real Gemini API. Empty results = safe rule-only fallback.
+  await page.route("**/api/classify-senders", (route) =>
+    route.fulfill({ json: { results: {} } })
+  );
+
   await page.route("**gmail.googleapis.com/**", (route) => {
     const url = route.request().url();
     if (url.includes("/profile")) {
@@ -128,10 +133,19 @@ export async function readTable(page) {
       progress: document.getElementById("progress").textContent,
       meta: document.getElementById("meta").textContent,
       err: document.getElementById("err").textContent,
-      // # / 서비스 / 도메인 / 정리 우선도 / 신뢰 / 마지막 흔적 / 건수 / 탈퇴
+      // # / 서비스 / 도메인 / 정리 우선도 / 신뢰 / 마지막 흔적 / 건수 / 내 선택 / 탈퇴
       services: [...document.getElementById("rows").children].map((tr) => {
         const c = cells(tr);
-        return { name: c[1], domain: c[2], priority: c[3], band: c[4], month: c[5], count: c[6], action: c[7] };
+        return {
+          name: c[1],
+          domain: c[2],
+          priority: c[3],
+          band: c[4],
+          month: c[5],
+          count: c[6],
+          choice: c[7],
+          action: c[8],
+        };
       }),
       excluded: [...document.getElementById("hiddenRows").children].map((tr) => {
         const c = cells(tr);

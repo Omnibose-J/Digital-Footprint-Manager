@@ -297,7 +297,7 @@ Do not introduce an LLM into discovery. Start with deterministic signals, the en
 | Product-account deletion | Primary DB within 24 hours | Verify the DB provider expires backups within 30 days before launch |
 | Security logs | 30 days | No email, subject, token, or message identifier |
 
-Controls: just-in-time disclosure before OAuth; least privilege and incremental authorization; TLS and encryption at rest; CSP `default-src 'none'`, with `connect-src` limited to the app, Google OAuth, the Gmail API, and Google Analytics, and `script-src`/`img-src` additionally admitting Google Tag Manager — the analytics origins were added when GA shipped (§8), so this list is what the browser may reach, not a claim that it cannot reach GA; no mailbox-derived identifier in analytics — no domain, service name, sender address, or subject, enforced by a key-and-value allowlist and its tests, while aggregate counts leave knowingly (§8); automated secret/PII redaction in logs and errors.
+Controls: just-in-time disclosure before OAuth; least privilege and incremental authorization; TLS and encryption at rest; CSP `default-src 'none'`, with `connect-src` limited to the app, Google OAuth, the Gmail API, and Google Analytics, and `script-src`/`img-src` additionally admitting Google Tag Manager — the analytics origins were added when GA shipped (§8), so this list is what the browser may reach, not a claim that it cannot reach GA; no mailbox-derived identifier in analytics **except the registrable domain on the cleanup-choice events** (`mark_delete`, `mark_keep`, `click_unsubscribe`) — no service name, no sender address, no subject, ever; enforced by a key-and-value allowlist and its tests, with `domain` the one key admitted by shape instead of by value, and only on those events (§8). Aggregate counts and those domains leave knowingly (§8); automated secret/PII redaction in logs and errors.
 
 ## 7. Validation Gates
 
@@ -440,6 +440,20 @@ Its architecture also collides with §5 independently of the credential question
 **Rejected:** Deleting GA to satisfy the sentence as written — the funnel is the only evidence the §7 gates are met, and a screen rule protects nothing an identifier rule does not protect better. Keeping §6 unamended and leaving the reasoning in a code comment — the absence of an entry here is exactly what let the contradiction stand.
 
 **Status:** Active
+
+### Decision: The cleanup choice carries its domain out; nothing else does - 2026-07-16
+
+**Context:** The entry above fixed the boundary at "no identifier read out of the mailbox leaves the browser — not a domain, not a service name". The owner then asked for exactly one of those back: which services people mark 미사용 and which they keep. `analytics.js` now admits a `domain` parameter on `mark_delete`, `mark_keep` and `click_unsubscribe`, and §6 is amended to match rather than left to contradict the code — which is the failure the entry above exists to record.
+
+**Why:** the band distribution says how confident we were; it does not say what the product is for. Whether people leave 쿠팡 and keep 토스, or the reverse, is the only signal that tells us which catalog entries earn their verification cost (§4 puts the top 20 on a monthly cycle — that budget is currently spent on frequency-in-pilot, which is a guess about attention). A count of 63 cannot answer it and no aggregate can: the question is *which*, and 'which' is the identifier.
+
+**What it costs, stated plainly:** "메일이 서버로 가지 않습니다" stays literally true — the scan still never leaves the browser — but the product can no longer say it learns nothing about *which services this user has*. On the three events, it learns exactly that, and Google Analytics is where it lands. Google already holds the mail these domains were read from, so the marginal disclosure to *Google* is small; the disclosure that is new is "this user decided to leave this service", which no one held before, including us. That is the trade, and it is the owner's to make.
+
+**The mechanism is weaker than the one it replaces, and that is the real cost.** Every other string is allowlisted by key *and* value against enums we authored. `domain` cannot be: the value set is the whole DNS. So it is admitted by **shape** — `isDomainParam` rejects `@`, whitespace, anything over 253 chars, and anything outside `[a-z0-9.-]`. The entry above records that shape already failed once here: `성균관대학교 SW전문인재양성사업단` walked through a length-and-punctuation filter. That exact string fails this one (spaces, non-ASCII), and the values reaching it come from `normalizeDomain(s.registrableDomain)`, which is a domain by construction — but the guarantee is now "the shape is narrow and the caller is careful" instead of "the value is on a list we wrote". **A new call site passing a display name that happens to look like a hostname would be waved through.** If `domain` ever needs to appear on a fourth event, that is the thing to re-examine, not the event count.
+
+**Rejected:** hashing the domain (a hash of a registrable domain is a lookup table with ~2,500 entries — it obscures the value from a reader, not from anyone who wants it, and buys the reporting nothing since the owner needs the name to act on it). Sending a catalog `service_id` instead (identical disclosure, and it silently drops every non-catalogued service, which is the long tail the question is about). Leaving §6 as written and keeping the reasoning in the code (the exact mistake the entry above was written to stop).
+
+**Status:** Active — supersedes the "not a domain" clause of the entry above; every other clause of it stands unchanged.
 
 ### Prior decisions (2026-07-15, all Active; full text in v1 archive)
 

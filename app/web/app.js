@@ -6,6 +6,10 @@ import { renderGuideHtml, renderRequestTemplate, maskAccount } from "/core/guide
 import { applyUserVerdict, sortBuckets } from "/core/verdict.js";
 import { escapeHtml } from "/core/html.js";
 import { initAnalytics, track } from "/core/analytics.js";
+import { FREE_MAILBOX_DOMAINS } from "/core/filter.rules.js";
+import { resolveCancelLink } from "/core/cancel-urls.js";
+
+const FREE_MAILBOX_SET = new Set(FREE_MAILBOX_DOMAINS);
 
 function el(id) {
   return document.getElementById(id);
@@ -20,6 +24,14 @@ const progressEl = el("progress");
 const progressTrack = el("progressTrack");
 const progressBar = el("progressBar");
 const meta = el("meta");
+const choiceSummary = el("choiceSummary");
+const unusedSummary = el("unusedSummary");
+const unusedRows = el("unusedRows");
+const unusedEmpty = el("unusedEmpty");
+const panelAll = el("panelAll");
+const panelUnused = el("panelUnused");
+const tabAll = el("tabAll");
+const tabUnused = el("tabUnused");
 const err = el("err");
 const rows = el("rows");
 const hiddenToggle = el("hiddenToggle");
@@ -79,32 +91,212 @@ let sessionEmail = "";
 /** The Gmail account the scan actually read, from users/me/profile. Not sessionEmail. */
 let scannedAccount = "";
 
-// data-safety, not just data-out, because this one anchor points at two different things. For a
-// catalogued row siteUrl is the catalog's own withdrawal URL; for an uncatalogued one it is
-// https://{sender domain}, a guess, which is what #linkNote warns about. They look identical in the
-// table, so counting them as one number would answer neither question.
-function serviceCell(s) {
-  const name = escapeHtml(s.displayName || s.registrableDomain || "");
-  if (s.siteUrl) {
-    return `<a href="${escapeHtml(s.siteUrl)}" data-out="list" data-safety="${escapeHtml(
-      s.linkSafety || "inferred"
-    )}" target="_blank" rel="noopener noreferrer">${name}</a>`;
+const CHOICE_STORAGE_KEY = "dfm-cleanup-choices-v1";
+const DONE_STORAGE_KEY = "dfm-unsubscribe-done-v1";
+/** @type {Record<string, "keep"|"delete">} domain -> choice (keep=사용, delete=미사용) */
+let cleanupChoices = loadCleanupChoices();
+/** @type {Record<string, true>} domain -> completed unsubscribe */
+let doneByDomain = loadDoneByDomain();
+/** @type {"all"|"unused"} */
+let activeTab = "all";
+
+function loadCleanupChoices() {
+  try {
+    const raw = localStorage.getItem(CHOICE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    const out = {};
+    for (const [domain, value] of Object.entries(parsed)) {
+      const d = normalizeDomain(domain);
+      if (d && (value === "keep" || value === "delete")) out[d] = value;
+    }
+    return out;
+  } catch {
+    return {};
   }
-  return name;
 }
 
-function deletionCell(s, index) {
+function saveCleanupChoices() {
+  try {
+    localStorage.setItem(CHOICE_STORAGE_KEY, JSON.stringify(cleanupChoices));
+  } catch {
+    /* private mode / quota — choice still works for this session */
+  }
+}
+
+function loadDoneByDomain() {
+  try {
+    const raw = localStorage.getItem(DONE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    const out = {};
+    for (const [domain, value] of Object.entries(parsed)) {
+      const d = normalizeDomain(domain);
+      if (d && value) out[d] = true;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveDoneByDomain() {
+  try {
+    localStorage.setItem(DONE_STORAGE_KEY, JSON.stringify(doneByDomain));
+  } catch {
+    /* ignore */
+  }
+}
+
+function normalizeDomain(domain) {
+  return String(domain || "")
+    .toLowerCase()
+    .replace(/\.$/, "")
+    .trim();
+}
+
+function getChoice(domain) {
+  const d = normalizeDomain(domain);
+  return d ? cleanupChoices[d] || null : null;
+}
+
+function setChoice(domain, choice) {
+  const d = normalizeDomain(domain);
+  if (!d || (choice !== "keep" && choice !== "delete")) return;
+  cleanupChoices[d] = choice;
+  saveCleanupChoices();
+  // Leaving the unused list clears the done check for that domain.
+  if (choice !== "delete" && doneByDomain[d]) {
+    delete doneByDomain[d];
+    saveDoneByDomain();
+  }
+}
+
+function isDone(domain) {
+  const d = normalizeDomain(domain);
+  return Boolean(d && doneByDomain[d]);
+}
+
+function setDone(domain, done) {
+  const d = normalizeDomain(domain);
+  if (!d) return;
+  if (done) doneByDomain[d] = true;
+  else delete doneByDomain[d];
+  saveDoneByDomain();
+}
+
+function updateChoiceSummary(services) {
+  if (!choiceSummary) return;
+  const list = services || [];
+  if (!list.length) {
+    choiceSummary.classList.add("hidden");
+    return;
+  }
+  let unused = 0;
+  let used = 0;
+  for (const s of list) {
+    const c = getChoice(s.registrableDomain);
+    if (c === "delete") unused += 1;
+    else if (c === "keep") used += 1;
+  }
+  choiceSummary.textContent = `미사용 ${unused}개 / 사용 ${used}개`;
+  choiceSummary.classList.remove("hidden");
+}
+
+function unusedServicesFromSnapshot(snapshot) {
+  return (snapshot?.services || []).filter((s) => getChoice(s.registrableDomain) === "delete");
+}
+
+function unusedRowHtml(s, i) {
+  const domain = normalizeDomain(s.registrableDomain);
+  const done = isDone(domain);
+  return `<td class="cell-rank">${i + 1}</td>
+      <td class="cell-service">${serviceCell(s)}</td>
+      <td class="cell-domain">${escapeHtml(domain)}</td>
+      <td class="cell-month" data-label="마지막 흔적">${escapeHtml(s.lastSeenMonth || "—")}</td>
+      <td class="cell-action">${deletionCell(s)}</td>
+      <td class="cell-done" data-label="완료">
+        <label class="done-check">
+          <input type="checkbox" data-done-domain="${escapeHtml(domain)}" ${done ? "checked" : ""} />
+          <span>완료</span>
+        </label>
+      </td>`;
+}
+
+function renderUnusedList() {
+  if (!unusedRows) return;
+  const list = unusedServicesFromSnapshot(lastSnapshot);
+  unusedRows.innerHTML = list
+    .map((s, i) => {
+      const trClass = isDone(s.registrableDomain) ? ' class="row-done"' : "";
+      return `<tr${trClass}>${unusedRowHtml(s, i)}</tr>`;
+    })
+    .join("");
+
+  const doneCount = list.filter((s) => isDone(s.registrableDomain)).length;
+  if (unusedSummary) {
+    unusedSummary.textContent = `미사용 ${list.length}개 · 완료 ${doneCount}개`;
+  }
+  unusedEmpty?.classList.toggle("hidden", list.length > 0);
+}
+
+function setActiveTab(tab) {
+  activeTab = tab === "unused" ? "unused" : "all";
+  const showUnused = activeTab === "unused";
+  panelAll?.classList.toggle("hidden", showUnused);
+  panelUnused?.classList.toggle("hidden", !showUnused);
+  if (panelUnused) panelUnused.hidden = !showUnused;
+  if (panelAll) panelAll.hidden = showUnused;
+  tabAll?.classList.toggle("is-active", !showUnused);
+  tabUnused?.classList.toggle("is-active", showUnused);
+  tabAll?.setAttribute("aria-selected", String(!showUnused));
+  tabUnused?.setAttribute("aria-selected", String(showUnused));
+  if (showUnused) renderUnusedList();
+}
+
+// Service name opens the sender's site (https://{domain}). Personal free-mailbox domains stay
+// plain text — https://gmail.com is not a product homepage worth sending anyone to.
+function serviceCell(s) {
+  const name = escapeHtml(s.displayName || s.registrableDomain || "");
+  const domain = String(s.registrableDomain || "")
+    .toLowerCase()
+    .replace(/\.$/, "");
+  const nameHtml = `<span class="service-name">${name}</span>`;
+  const domainHtml = domain ? `<span class="service-domain">${escapeHtml(domain)}</span>` : "";
+  if (!domain || s.linkBlockedBy === "free_mailbox" || FREE_MAILBOX_SET.has(domain)) {
+    return `${nameHtml}${domainHtml}`;
+  }
+  return `<a class="service-link" href="https://${escapeHtml(domain)}" data-out="list" data-safety="domain" target="_blank" rel="noopener noreferrer">${nameHtml}${domainHtml}</a>`;
+}
+
+function deletionCell(s) {
   if (s.likelyClosed) {
     return `<span class="band band-closed">폐쇄 추정</span>`;
   }
-  // Without a catalog entry there is no verified route, no privacy contact for the request
-  // template to reach, and nothing to say that is about THIS service. The old button opened
-  // generic advice, which reads as an answer and is not one. State the gap instead.
-  if (s.linkSafety !== "verified") {
-    return `<span class="cell-none" title="이 서비스의 공식 탈퇴 경로를 아직 확인하지 못했습니다">경로 미확인</span>`;
+  const name = s.displayName || s.registrableDomain || "";
+  const domain = normalizeDomain(s.registrableDomain);
+  const action = resolveCancelLink(s.registrableDomain, name);
+  return `<a class="btn-row" href="${escapeHtml(action.url)}" data-out="cancel" data-cancel-type="${escapeHtml(
+    action.type
+  )}" data-domain="${escapeHtml(domain)}" target="_blank" rel="noopener noreferrer">${escapeHtml(action.label)}</a>`;
+}
+
+function choiceCell(s) {
+  const domain = normalizeDomain(s.registrableDomain);
+  if (!domain) {
+    return `<span class="cell-none">—</span>`;
   }
-  const label = isStale(s.catalogEntry || {}) ? "탈퇴 (검토 필요)" : "탈퇴";
-  return `<button type="button" class="btn-row" data-guide="${index}">${label}</button>`;
+  const choice = getChoice(domain);
+  const keepOn = choice === "keep" ? " is-on" : "";
+  const delOn = choice === "delete" ? " is-on is-delete" : "";
+  const tag = choice === "delete" ? `<span class="tag-delete">미사용</span>` : "";
+  return `<div class="choice-btns">
+    <button type="button" class="btn-choice${keepOn}" data-choice="keep" data-domain="${escapeHtml(domain)}">사용</button>
+    <button type="button" class="btn-choice${delOn}" data-choice="delete" data-domain="${escapeHtml(domain)}">미사용</button>
+    ${tag}
+  </div>`;
 }
 
 function bandCell(s) {
@@ -160,7 +352,8 @@ function rowHtml(s, i) {
       <td data-label="신뢰">${bandCell(s)}</td>
       <td class="cell-month" data-label="마지막 흔적">${escapeHtml(s.lastSeenMonth || "—")}</td>
       <td class="col-count" data-label="건수">${s.messageCount}</td>
-      <td class="cell-action">${deletionCell(s, i)}</td>`;
+      <td class="cell-choice" data-label="내 선택">${choiceCell(s)}</td>
+      <td class="cell-action">${deletionCell(s)}</td>`;
 }
 
 /**
@@ -198,6 +391,7 @@ function reconcileRows(services) {
       tr.dataset.html = html;
     }
     tr.classList.toggle("row-closed", Boolean(s.likelyClosed));
+    tr.classList.toggle("row-mark-delete", getChoice(s.registrableDomain) === "delete");
     existing.delete(s.key);
     frag.appendChild(tr);
   });
@@ -205,6 +399,7 @@ function reconcileRows(services) {
   rows.appendChild(frag);
 
   playRankMoves(before);
+  updateChoiceSummary(services);
 }
 
 /** FLIP: invert each moved row to its old position, then let it transition home. */
@@ -253,6 +448,7 @@ function renderSnapshot(rawSnapshot) {
     .join("");
 
   emptyState?.classList.toggle("hidden", services.length > 0);
+  renderUnusedList();
 }
 
 function setProgressBar(fraction) {
@@ -499,6 +695,17 @@ hiddenRows?.addEventListener("click", (ev) => {
 });
 
 rows?.addEventListener("click", (ev) => {
+  const choiceBtn = ev.target.closest?.("[data-choice]");
+  if (choiceBtn) {
+    const domain = choiceBtn.getAttribute("data-domain") || "";
+    const choice = choiceBtn.getAttribute("data-choice");
+    if (!domain || (choice !== "keep" && choice !== "delete")) return;
+    setChoice(domain, choice);
+    track(choice === "delete" ? "mark_delete" : "mark_keep", { domain });
+    if (lastSnapshot) renderSnapshot(lastSnapshot);
+    return;
+  }
+
   const btn = ev.target.closest("[data-guide]");
   if (!btn || !lastSnapshot) return;
   const idx = Number(btn.getAttribute("data-guide"));
@@ -513,7 +720,30 @@ rows?.addEventListener("click", (ev) => {
   const link = ev.target.closest?.("a[data-out]");
   if (!link) return;
   track("outbound_click", { link: link.dataset.out, safety: link.dataset.safety });
+  if (link.dataset.out === "cancel") {
+    track("click_unsubscribe", { domain: link.dataset.domain || "" });
+  }
 });
+
+unusedRows?.addEventListener("click", (ev) => {
+  const link = ev.target.closest?.("a[data-out]");
+  if (!link) return;
+  track("outbound_click", { link: link.dataset.out, safety: link.dataset.safety });
+  if (link.dataset.out === "cancel") {
+    track("click_unsubscribe", { domain: link.dataset.domain || "" });
+  }
+});
+
+unusedRows?.addEventListener("change", (ev) => {
+  const input = ev.target.closest?.("input[data-done-domain]");
+  if (!input) return;
+  const domain = input.getAttribute("data-done-domain") || "";
+  setDone(domain, Boolean(input.checked));
+  renderUnusedList();
+});
+
+tabAll?.addEventListener("click", () => setActiveTab("all"));
+tabUnused?.addEventListener("click", () => setActiveTab("unused"));
 
 // Every link out of the modal goes to someone else's site, and that is the last thing this product
 // can see: the withdrawal happens where we are not. Bound once, here, rather than per open, because
@@ -547,6 +777,7 @@ scanBtn?.addEventListener("click", async () => {
   hiddenRows.innerHTML = "";
   lastSnapshot = null;
   userVerdict.clear();
+  if (choiceSummary) choiceSummary.classList.add("hidden");
   scanBtn.disabled = true;
   linkNote.classList.add("hidden");
 

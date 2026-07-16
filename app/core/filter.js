@@ -525,10 +525,13 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
     });
     const likelyClosed = computeLikelyClosed(families, [...sb.closureMonths]);
     const links = linkFields(svc.registrableDomain, hiddenRule, null, rules);
+    const emails = [...svc.emails];
     return {
       key: svc.key, // stable identity across snapshots; registrableDomain is not unique
       registrableDomain: svc.registrableDomain,
       displayName: mostFrequentName(svc.nameCounts) || svc.registrableDomain || "",
+      // Representative From address for LLM classify only (never the message body).
+      primaryEmail: emails[0] || "",
       messageCount: svc.messageCount,
       families,
       lastSeenMonth: lastSeenMonthFromFamilies(families),

@@ -413,6 +413,9 @@ button {
 
 /* Row-level controls stay small and quiet: 150 rows of loud pills is a wall. */
 .btn-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--canvas);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
@@ -420,7 +423,9 @@ button {
   font-size: var(--text-xs);
   font-weight: 500;
   color: var(--ink-quiet);
+  text-decoration: none;
   white-space: nowrap;
+  cursor: pointer;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
     color var(--dur) var(--ease);
 }
@@ -518,21 +523,25 @@ table {
    the only column that flexes; everything else holds still while rows stream in. */
 .table-services {
   table-layout: fixed;
-  min-width: 1000px;
+  min-width: 100%;
+  width: 100%;
 }
 
 .w-pri {
-  width: 210px;
+  width: 18%;
 }
 
 .w-rank {
   width: 44px;
 }
+.w-service {
+  width: 22%;
+}
 .w-domain {
-  width: 170px;
+  width: 14%;
 }
 .w-band {
-  width: 230px;
+  width: 18%;
 }
 .w-month {
   width: 96px;
@@ -540,12 +549,175 @@ table {
 .w-count {
   width: 68px;
 }
+.w-choice {
+  width: 150px;
+}
 .w-action {
-  width: 116px;
+  width: 140px;
+}
+
+.choice-summary {
+  margin: var(--s3) 0;
+  color: var(--ink-quiet);
+  font-size: var(--text-sm);
+}
+
+.list-tabs {
+  display: flex;
+  gap: var(--s2);
+  margin: var(--s4) 0 var(--s3);
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.list-tab {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: var(--s2) var(--s3);
+  color: var(--ink-quiet);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.list-tab:hover {
+  color: var(--ink-deep);
+}
+
+.list-tab.is-active {
+  color: var(--ink-deep);
+  border-bottom-color: var(--accent-text);
+}
+
+.list-panel[hidden],
+.list-panel.hidden {
+  display: none;
+}
+
+.table-unused {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.table-unused th,
+.table-unused td {
+  text-align: left;
+  padding: var(--s3);
+  vertical-align: middle;
+  border-bottom: 1px solid var(--rule);
+}
+
+.done-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--ink-quiet);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.done-check input {
+  width: 16px;
+  height: 16px;
+}
+
+tr.row-done td {
+  opacity: 0.72;
+}
+
+.choice-btns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-choice {
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  padding: 3px 8px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--ink-quiet);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-choice:hover {
+  border-color: var(--ink-quiet);
+  color: var(--ink-deep);
+}
+
+.btn-choice.is-on {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+  background: var(--surface);
+}
+
+.btn-choice.is-delete.is-on {
+  border-color: #b42318;
+  color: #b42318;
+  background: #fef3f2;
+}
+
+.tag-delete {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: #b42318;
+  white-space: nowrap;
+}
+
+tr.row-mark-delete td {
+  background: #fef3f2;
+}
+
+tr.row-mark-delete:hover td {
+  background: #fcebea;
 }
 
 .table-services td {
   overflow-wrap: anywhere;
+}
+
+/* Service names must stay readable: never break letter-by-letter (overflow-wrap:anywhere). */
+.table-services .cell-service {
+  overflow-wrap: normal;
+  word-break: keep-all;
+  overflow: hidden;
+  vertical-align: top;
+}
+
+.table-services .cell-service .service-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--ink-deep);
+}
+
+.table-services .cell-service .service-domain {
+  display: block;
+  margin-top: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--ink-quiet);
+  line-height: 1.35;
+}
+
+.table-services .cell-domain {
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 th,
@@ -596,13 +768,18 @@ th:first-child {
   text-align: right;
 }
 
-.cell-service a {
-  color: var(--ink-deep);
-  font-weight: 600;
+.cell-service a,
+.cell-service .service-link {
+  color: inherit;
+  font-weight: inherit;
   text-decoration: none;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
 }
 
-.cell-service a:hover {
+.cell-service a:hover .service-name,
+.cell-service .service-link:hover .service-name {
   color: var(--accent-text);
   text-decoration: underline;
 }
@@ -1054,6 +1231,17 @@ tr.row-closed td {
   .table-services .cell-service {
     font-weight: 600;
     padding-right: var(--s6);
+    overflow: visible;
+  }
+  .table-services .cell-service .service-name {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    overflow-wrap: break-word;
+    word-break: keep-all;
+  }
+  .table-services .cell-service .service-domain {
+    white-space: nowrap;
   }
   .table-services .cell-domain {
     opacity: 0.6;

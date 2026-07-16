@@ -70,69 +70,110 @@
         <div id="meta" class="meta"></div>
         <div id="err" class="err"></div>
 
-        <p id="linkNote" class="note hidden">
-          발신 도메인에서 추정한 주소입니다. 공식 사이트인지 확인 후 이용하세요.
-        </p>
-
-        <div class="table-wrap">
-          <!-- Fixed widths, declared once. With table-layout:auto the browser re-measures every
-               column against every row on each render, and during a scan that is the list
-               twitching. -->
-          <table class="table-services">
-            <caption class="hidden">메일함에서 찾은 서비스</caption>
-            <colgroup>
-              <col class="w-rank" />
-              <col />
-              <col class="w-domain" />
-              <col class="w-pri" />
-              <col class="w-band" />
-              <col class="w-month" />
-              <col class="w-count" />
-              <col class="w-action" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">서비스</th>
-                <th scope="col">도메인</th>
-                <th scope="col">정리 우선도</th>
-                <th scope="col">신뢰</th>
-                <th scope="col">마지막 흔적</th>
-                <th scope="col" class="col-count">건수</th>
-                <th scope="col">탈퇴</th>
-              </tr>
-            </thead>
-            <tbody id="rows"></tbody>
-          </table>
+        <div class="list-tabs" role="tablist" aria-label="목록 전환">
+          <button id="tabAll" type="button" class="list-tab is-active" role="tab" aria-selected="true" data-tab="all">
+            전체 목록
+          </button>
+          <button id="tabUnused" type="button" class="list-tab" role="tab" aria-selected="false" data-tab="unused">
+            미사용 목록
+          </button>
         </div>
 
-        <div id="emptyState" class="empty">
-          <p>아직 스캔하지 않았습니다.</p>
-          <p class="note">위의 <strong>Gmail 연결하고 스캔</strong>을 누르면 메일함에서 계정 흔적을 찾습니다.</p>
-        </div>
+        <div id="panelAll" class="list-panel" data-panel="all">
+          <div id="choiceSummary" class="choice-summary hidden" aria-live="polite">
+            미사용 0개 / 사용 0개
+          </div>
 
-        <div id="hiddenPanel" class="excluded">
-          <button id="hiddenToggle" type="button" class="btn-text">제외된 발신자 0개 보기</button>
-          <div id="hiddenBody" class="excluded-body hidden">
-            <p class="note">
-              규칙이 서비스가 아니라고 판단해 목록에서 뺀 발신자입니다. 아니라고 보이면 복구하세요.
-            </p>
-            <div class="table-wrap">
-              <table>
-                <caption class="hidden">제외된 발신자</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">#</th>
-                    <th scope="col">서비스</th>
-                    <th scope="col">도메인</th>
-                    <th scope="col">사유</th>
-                    <th scope="col" class="col-count">건수</th>
-                    <th scope="col"><span class="hidden">복구</span></th>
-                  </tr>
-                </thead>
-                <tbody id="hiddenRows"></tbody>
-              </table>
+          <p id="linkNote" class="note hidden">
+            발신 도메인에서 추정한 주소입니다. 공식 사이트인지 확인 후 이용하세요.
+          </p>
+
+          <div class="table-wrap">
+            <!-- Fixed widths, declared once. With table-layout:auto the browser re-measures every
+                 column against every row on each render, and during a scan that is the list
+                 twitching. -->
+            <table class="table-services">
+              <caption class="hidden">메일함에서 찾은 서비스</caption>
+              <colgroup>
+                <col class="w-rank" />
+                <col class="w-service" />
+                <col class="w-domain" />
+                <col class="w-pri" />
+                <col class="w-band" />
+                <col class="w-month" />
+                <col class="w-count" />
+                <col class="w-choice" />
+                <col class="w-action" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">서비스</th>
+                  <th scope="col">도메인</th>
+                  <th scope="col">정리 우선도</th>
+                  <th scope="col">신뢰</th>
+                  <th scope="col">마지막 흔적</th>
+                  <th scope="col" class="col-count">건수</th>
+                  <th scope="col">내 선택</th>
+                  <th scope="col">탈퇴</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+
+          <div id="emptyState" class="empty">
+            <p>아직 스캔하지 않았습니다.</p>
+            <p class="note">위의 <strong>Gmail 연결하고 스캔</strong>을 누르면 메일함에서 계정 흔적을 찾습니다.</p>
+          </div>
+
+          <div id="hiddenPanel" class="excluded">
+            <button id="hiddenToggle" type="button" class="btn-text">제외된 발신자 0개 보기</button>
+            <div id="hiddenBody" class="excluded-body hidden">
+              <p class="note">
+                규칙이 서비스가 아니라고 판단해 목록에서 뺀 발신자입니다. 아니라고 보이면 복구하세요.
+              </p>
+              <div class="table-wrap">
+                <table>
+                  <caption class="hidden">제외된 발신자</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">#</th>
+                      <th scope="col">서비스</th>
+                      <th scope="col">도메인</th>
+                      <th scope="col">사유</th>
+                      <th scope="col" class="col-count">건수</th>
+                      <th scope="col"><span class="hidden">복구</span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="hiddenRows"></tbody>
+                </table>
+              </div>
             </div>
+          </div>
+        </div>
+
+        <div id="panelUnused" class="list-panel hidden" data-panel="unused" hidden>
+          <div id="unusedSummary" class="choice-summary" aria-live="polite">미사용 0개 · 완료 0개</div>
+          <div class="table-wrap">
+            <table class="table-unused">
+              <caption class="hidden">미사용으로 고른 서비스</caption>
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">서비스</th>
+                  <th scope="col">도메인</th>
+                  <th scope="col">마지막 흔적</th>
+                  <th scope="col">탈퇴</th>
+                  <th scope="col">완료</th>
+                </tr>
+              </thead>
+              <tbody id="unusedRows"></tbody>
+            </table>
+          </div>
+          <div id="unusedEmpty" class="empty hidden">
+            <p>미사용으로 고른 서비스가 없습니다.</p>
+            <p class="note">전체 목록에서 <strong>미사용</strong>을 누르면 여기에 모입니다.</p>
           </div>
         </div>
       </section>

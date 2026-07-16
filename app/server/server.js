@@ -3,6 +3,8 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { OAuth2Client } from "google-auth-library";
+import { classifySendersWithGemini, loadGeminiApiKey } from "./gemini-classify.js";
+import { loadGaMeasurementId } from "./load-local-config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Each asset dir is mounted by name. Serving app/ wholesale would expose .env and this source.
@@ -10,7 +12,8 @@ const webDir = path.resolve(__dirname, "..", "web");
 const coreDir = path.resolve(__dirname, "..", "core");
 const dataDir = path.resolve(__dirname, "..", "data");
 const port = Number(process.env.PORT || 3456);
-const gaMeasurementId = process.env.GA_MEASUREMENT_ID || "";
+// Prefer config.ts (local). Fall back to .env for older setups.
+const gaMeasurementId = loadGaMeasurementId() || process.env.GA_MEASUREMENT_ID || "";
 const clientId = process.env.GOOGLE_CLIENT_ID || "";
 const concurrency = Number(process.env.GMAIL_CONCURRENCY || 12);
 const maxMessages = Number(process.env.GMAIL_MAX_MESSAGES || 0);
@@ -35,7 +38,7 @@ const CONTENT_SECURITY_POLICY = [
 
 const app = express();
 app.disable("x-powered-by");
-app.use(express.json({ limit: "256kb" }));
+app.use(express.json({ limit: "1mb" }));
 
 app.use((req, res, next) => {
   res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
@@ -214,6 +217,29 @@ app.post("/api/auth/logout", (req, res) => {
   }
   clearSessionCookie(req, res);
   res.json({ ok: true });
+});
+
+/**
+ * Gemini classify: display name + email only. Batches of 20 on the server.
+ * On any failure the client keeps rule-based scores unchanged.
+ */
+app.post("/api/classify-senders", async (req, res) => {
+  if (!isSameOrigin(req)) {
+    res.status(403).json({ error: "cross-origin" });
+    return;
+  }
+  if (!loadGeminiApiKey()) {
+    res.status(503).json({ error: "GEMINI_API_KEY missing", results: {} });
+    return;
+  }
+  const senders = Array.isArray(req.body?.senders) ? req.body.senders.slice(0, 500) : [];
+  try {
+    const results = await classifySendersWithGemini(senders);
+    res.json({ results });
+  } catch (e) {
+    console.warn("[gemini] classify route failed", e?.message || e);
+    res.json({ results: {} });
+  }
 });
 
 app.use(express.static(webDir));

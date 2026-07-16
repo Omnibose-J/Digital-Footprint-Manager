@@ -4,6 +4,50 @@ Problems found while doing other work, verified, and deliberately not fixed ther
 says why it could not be solved at the time and what it costs to leave. Delete an entry when it
 is fixed, not when it is noticed.
 
+## The Gemini classifier is wired to a route the spec forbids reaching (2026-07-16, dead today, deliberate)
+
+`server/gemini-classify.js` and `POST /api/classify-senders` arrived with the UI merge. Nothing calls
+them: `web/app.js` has no reference, the only caller is the e2e harness, and `loadGeminiApiKey()`
+reads `src/lib/config.ts` — a path that resolves above this repo's root and does not exist — so the
+route answers 503 before it can do anything. It is kept on purpose: the owner intends to connect it
+from a different surface later.
+
+**Connecting it as written contradicts two spec clauses, and neither is a detail.** §3: "Never send
+raw message bodies, subjects, or **full sender addresses** to the product backend" — the route's
+payload is display name plus full sender address, which is the named example. §5: "**Do not
+introduce an LLM into discovery.** Start with deterministic signals, the entity catalog, and user
+confirmation." The prompt is careful (headers only, never invents body content) and that is not the
+objection: the objection is that the address crosses to the server at all, and then to Google, which
+is the boundary the whole privacy claim rests on (§8 benchmark: every dead rival processed
+server-side).
+
+**Not resolved here** because the fix is a decision, not a line. Two branches, both real: run the
+classification **in the browser** against Gemini directly, which keeps the §3 boundary intact and
+makes the scope question moot but puts an API key in a client bundle; or accept the server hop and
+amend §3/§5 the way §6 was just amended for `domain` — with the cost written down rather than left
+in a comment.
+
+**Blast radius today: none, and that is exactly why it is written here rather than fixed.** The
+route 503s, so this is a fact about the missing key, not about the code. The moment a key appears at
+that path, `/api/classify-senders` is a live Gemini proxy that checks same-origin and **nothing
+else** — no session check, unlike `/api/me` — accepting 500 senders per POST from any logged-out
+visitor to the page.
+
+## .env.example was deleted, and README still tells you to copy it (2026-07-16)
+
+The UI merge dropped `app/.env.example` and moved local config to `src/lib/config.ts`, a Next.js
+layout this repo does not have (see the entry above). `loadGaMeasurementId()` falls back to
+`process.env.GA_MEASUREMENT_ID`, so analytics survives on the existing `.env`; `GOOGLE_CLIENT_ID`
+has no such fallback — `server.js` reads it from `process.env` only, and without it `/api/config`
+returns 500 and the sign-in button cannot render.
+
+So README §9's `cp .env.example .env` now fails, and the file it names is the only record of which
+keys the app needs. **Blast radius:** invisible to anyone with a working `.env` — which is everyone
+who has already run this — and a hard stop for the next person who clones it, with no error message
+that names the missing file. Restoring `.env.example` is one file; it is left for the owner because
+the same merge is where `src/lib/config.ts` came from, and if that path is the intended direction
+then `.env.example` should be replaced rather than resurrected.
+
 ## gmail.readonly is broader than what the code currently does (2026-07-16, needs a decision)
 
 A security audit called this High and it is half right. We request `gmail.readonly`, whose consent

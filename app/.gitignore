@@ -7,3 +7,6 @@ sow/
 .vercel
 
 .vercel
+
+# Local-only Gemini API key (never commit)
+../src/lib/config.ts

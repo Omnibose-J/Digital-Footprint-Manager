@@ -175,35 +175,16 @@ test.describe("the scan a user actually sees", () => {
     expect(auction.band).not.toContain("폐쇄 추정");
   });
 
-  test("the guide modal opens with the catalog's verified content", async ({ page }) => {
+  test("the cancel link opens the mapped Spotify withdrawal URL", async ({ page }) => {
     await runScan(page);
-    const row = page.locator("#rows tr", { hasText: "spotify.com" });
-    await row.getByRole("button").click();
-
-    const modal = page.locator("#guideModal");
-    await expect(modal).toBeVisible();
-    await expect(modal).toContainText("Spotify");
-    await expect(modal).toContainText("탈퇴 경로");
-    // Verified, not inferred: this domain is in the catalog and was read against its source.
-    await expect(modal).toContainText("verified");
-
-    // Spotify's own facts lead, above the route. This is the reason the modal exists.
-    await expect(modal.locator(".guide-prereq")).toContainText("Premium만 끊으려면");
-
-    // The advice that is identical for all 46 is present but folded shut, so it cannot outweigh
-    // the four lines that are actually about closing this account.
-    const generic = modal.locator("details", { hasText: "모든 서비스에 해당하는" });
-    await expect(generic).not.toHaveAttribute("open", /.*/);
-    await generic.locator("summary").click();
-    await expect(generic).toContainText("비활성화가 곧 삭제는 아닙니다");
-
-    await page.click("#guideClose");
-    await expect(modal).toBeHidden();
+    const link = page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]');
+    await expect(link).toHaveText("탈퇴 페이지 열기");
+    await expect(link).toHaveAttribute("href", "https://support.spotify.com/article/close-account/");
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
 
-  test("the 탈퇴 button reports the open, and the copy reports the use", async ({ page }) => {
-    // guide_opened predates today and had only ever been driven by a fake window in the unit
-    // tests. Nothing had checked that clicking the actual button in an actual browser fires it.
+  test("the cancel link is counted as outbound", async ({ page }) => {
     await runScan(page);
     const events = () =>
       page.evaluate(() =>
@@ -213,33 +194,19 @@ test.describe("the scan a user actually sees", () => {
           .map((a) => ({ name: a[1], params: a[2] }))
       );
 
-    await page.locator("#rows tr", { hasText: "spotify.com" }).getByRole("button").click();
-    const opened = (await events()).filter((e) => e.name === "guide_opened");
-    expect(opened).toEqual([
-      { name: "guide_opened", params: { band: "high", route: "self_service", stale: false } },
+    const [popup] = await Promise.all([
+      page.waitForEvent("popup"),
+      page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]').click(),
     ]);
-
-    // Chromium withholds clipboard access from an automated context, so the copy lands in the
-    // catch and reports 복사 실패. A real browser on localhost or https grants it on a user
-    // gesture; this is the harness lacking a permission, not the product failing to copy.
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-
-    // catalogued is deliberately absent from both: every guide that opens is catalogued now, so
-    // the parameter had one value. Asserting the exact object is what catches it coming back.
-    await page.locator("summary", { hasText: "개인정보 삭제 요청문" }).click();
-    await page.click("#guideCopyBtn");
-    await expect(page.locator("#guideCopyBtn")).toHaveText("복사됨");
-    const copied = (await events()).filter((e) => e.name === "template_copied");
-    expect(copied).toEqual([{ name: "template_copied", params: { route: "self_service" } }]);
+    await popup.close();
+    const cancelClicks = (await events()).filter((e) => e.name === "outbound_click");
+    expect(cancelClicks).toHaveLength(1);
+    expect(cancelClicks[0].params.link).toBe("cancel");
   });
 
-  test("the list's own outbound link is counted, split by whether we guessed the address", async ({
+  test("the list's own outbound link is counted when the service name is clicked", async ({
     page,
   }) => {
-    // The service name in the table is a link, and it was the one outbound path with no counter.
-    // It points at two different things: the catalog's withdrawal URL for a catalogued row, and
-    // https://{sender domain} for a guess. They render identically, so one number would conflate
-    // "went to close their account" with "went to see whether our guess was even right".
     await runScan(page);
     const clicks = () =>
       page.evaluate(() =>
@@ -251,20 +218,19 @@ test.describe("the scan a user actually sees", () => {
 
     const [p1] = await Promise.all([
       page.waitForEvent("popup"),
-      page.locator("#rows tr", { hasText: "spotify.com" }).locator("a[data-out]").click(),
+      page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="list"]').click(),
     ]);
     await p1.close();
-    expect(await clicks()).toEqual([{ link: "list", safety: "verified" }]);
+    expect(await clicks()).toEqual([{ link: "list", safety: "domain" }]);
 
-    // Vercel has no catalog entry, so its address is inferred from the sender domain.
     const [p2] = await Promise.all([
       page.waitForEvent("popup"),
-      page.locator("#rows tr", { hasText: "vercel.com" }).locator("a[data-out]").click(),
+      page.locator("#rows tr", { hasText: "vercel.com" }).locator('a[data-out="list"]').click(),
     ]);
     await p2.close();
     expect(await clicks()).toEqual([
-      { link: "list", safety: "verified" },
-      { link: "list", safety: "inferred" },
+      { link: "list", safety: "domain" },
+      { link: "list", safety: "domain" },
     ]);
   });
 
@@ -310,21 +276,12 @@ test.describe("the scan a user actually sees", () => {
     ]);
   });
 
-  test("following the route to the official page is counted, without the URL", async ({ page }) => {
-    // The withdrawal happens on Spotify's site, where this product cannot follow. Clicking through
-    // is the last thing it can observe, so it is the only real conversion signal there is.
+  test("following a cancel link is counted, without the URL", async ({ page }) => {
     await runScan(page);
-    // Opened, closed, opened again before the click. guideBody survives the close, so a listener
-    // bound per open would report this single click twice. That was the first version of this.
-    const openGuideFor = async (domain) =>
-      page.locator("#rows tr", { hasText: domain }).getByRole("button").click();
-    await openGuideFor("spotify.com");
-    await page.click("#guideClose");
-    await openGuideFor("spotify.com");
-
-    const routeLink = page.locator('#guideBody a[data-out="route"]');
-    await expect(routeLink).toHaveCount(1);
-    const [popup] = await Promise.all([page.waitForEvent("popup"), routeLink.click()]);
+    const [popup] = await Promise.all([
+      page.waitForEvent("popup"),
+      page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]').click(),
+    ]);
     await popup.close();
 
     const clicks = await page.evaluate(() =>
@@ -333,27 +290,23 @@ test.describe("the scan a user actually sees", () => {
         .filter((a) => a[0] === "event" && a[1] === "outbound_click")
         .map((a) => a[2])
     );
-    // Once, not once per guide ever opened: guideBody outlives the modal, so binding the listener
-    // on open would have made the third click report three.
-    expect(clicks).toEqual([{ link: "route", route: "self_service" }]);
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0].link).toBe("cancel");
     expect(JSON.stringify(clicks)).not.toContain("spotify");
   });
 
-  test("a service we have no route for offers no button, because the guide had nothing to say", async ({ page }) => {
-    // Vercel is a real account here: signup + auth, high band. What we do NOT have is its official
-    // withdrawal route or a privacy contact, so the request template has nowhere to go and the
-    // modal could only have shown advice identical for every service. A button promising 탈퇴 안내
-    // and delivering that is worse than admitting the gap.
+  test("mapped and unmapped rows both get a cancel link with the right label", async ({ page }) => {
     await runScan(page);
-    const unmatched = page.locator("#rows tr", { hasText: "vercel.com" });
-    await expect(unmatched).toBeVisible();
-    await expect(unmatched.getByRole("button")).toHaveCount(0);
-    await expect(unmatched).toContainText("경로 미확인");
 
-    // The catalog-matched row keeps its button, so this is the gap talking and not a dead column.
-    await expect(
-      page.locator("#rows tr", { hasText: "spotify.com" }).getByRole("button")
-    ).toHaveCount(1);
+    const vercel = page.locator("#rows tr", { hasText: "vercel.com" });
+    await expect(vercel).toBeVisible();
+    const vercelLink = vercel.locator('a[data-out="cancel"]');
+    await expect(vercelLink).toHaveText("계정 설정 열기");
+    await expect(vercelLink).toHaveAttribute("href", "https://vercel.com/account");
+
+    const spotify = page.locator("#rows tr", { hasText: "spotify.com" }).locator('a[data-out="cancel"]');
+    await expect(spotify).toHaveText("탈퇴 페이지 열기");
+    await expect(spotify).toHaveAttribute("href", "https://support.spotify.com/article/close-account/");
   });
 
   test("analytics reports the catalog gap and never what is in the mailbox", async ({ page }) => {
@@ -374,11 +327,6 @@ test.describe("the scan a user actually sees", () => {
     // likely_closed so it is out of the count entirely. That leaves exactly Vercel.
     expect(scan.candidates).toBe(4);
     expect(scan.no_route).toBe(1);
-
-    // And it must track the catalog, not the row count: the number of rows offering a 탈퇴 button
-    // plus the ones we have no route for has to account for every row we did not call closed.
-    const routed = await page.locator("#rows tr", { hasText: "경로 미확인" }).count();
-    expect(routed).toBe(scan.no_route);
 
     // The boundary, asserted against the real event and not a hand-built one: every value that
     // leaves is a number, a boolean, or a string we wrote ourselves. A domain reaching GA is the
@@ -437,7 +385,12 @@ test.describe("the scan a user actually sees", () => {
     expect(after).toBe(before);
   });
 
-  test("the modal locks the page behind it instead of scrolling two things at once", async ({ page }) => {
+  // Skipped, not deleted: the withdrawal guide moved out of the row. deletionCell now renders an
+  // external cancel link, so nothing in the list carries data-guide and the modal has no opener —
+  // this cannot be driven from here today. openGuide, core/guide.js and the catalog are all still
+  // wired, and the modal is going back on a different surface, so the lock it needs is still a
+  // requirement. Re-point this at that surface's opener when it lands; do not delete it before then.
+  test.skip("the modal locks the page behind it instead of scrolling two things at once", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 400 });
     await runScan(page);
     await page.locator("#rows tr", { hasText: "spotify.com" }).getByRole("button").click();
@@ -448,33 +401,37 @@ test.describe("the scan a user actually sees", () => {
     expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).not.toBe("hidden");
   });
 
-  test("the page never scrolls sideways, only the table does", async ({ page }) => {
-    // 800px, not 390: below 640 the table stops being a table and becomes cards, so there is
-    // nothing left to scroll sideways and this assertion has no subject. The phone widths are
-    // covered in phone.spec.js. Between 640 and the table's 1000px this is still the live case:
-    // eight columns wider than the window, contained by the wrapper instead of widening the page.
+  test("the page never scrolls sideways", async ({ page }) => {
+    // 800px, not 390: below 640 the table stops being a table and becomes cards. The phone widths
+    // are covered in phone.spec.js.
+    //
+    // This used to also assert the table overflowed its wrapper (tableScrollsInside), back when
+    // .table-services was min-width:1000px and eight columns were wider than this window. The table
+    // is now min-width:100%/width:100% and fits any viewport by construction, so that assertion
+    // demanded an overflow the design no longer produces. What it was protecting is the line below,
+    // and that survives unchanged: whatever the table does, it does not widen the page.
     await page.setViewportSize({ width: 800, height: 900 });
     await runScan(page);
-    const m = await page.evaluate(() => {
+    const pageScrollsSideways = await page.evaluate(() => {
       const d = document.documentElement;
-      const w = document.querySelector("#appPanel .table-wrap");
-      return {
-        pageH: d.scrollWidth > d.clientWidth + 1,
-        tableScrollsInside: w.scrollWidth > w.clientWidth,
-      };
+      return d.scrollWidth > d.clientWidth + 1;
     });
-    expect(m.pageH).toBe(false);
-    expect(m.tableScrollsInside).toBe(true);
+    expect(pageScrollsSideways).toBe(false);
   });
 
   test("a closed account offers no withdrawal guide, only the badge", async ({ page }) => {
     // Found by the e2e on its first run, and it is correct: §3 marks likely_closed and excludes it
-    // from the cleanup list, so deletionCell renders the badge in place of the button. Guiding
-    // someone to withdraw from an account they already closed is the wrong instruction.
+    // from the cleanup list, so deletionCell renders the badge in place of the withdrawal action.
+    // Guiding someone to withdraw from an account they already closed is the wrong instruction.
+    //
+    // Counts the cancel link, not every button in the row: the row now also carries 사용/미사용,
+    // which are a question about the account, not an instruction to leave it. A bare
+    // getByRole("button") here asserted "this row has no controls at all", which was only ever
+    // true by accident — the withdrawal action was the row's one button.
     await runScan(page);
     const row = page.locator("#rows tr", { hasText: "auction.co.kr" });
     await expect(row).toContainText("폐쇄 추정");
-    await expect(row.getByRole("button")).toHaveCount(0);
+    await expect(row.locator("a[data-out='cancel']")).toHaveCount(0);
   });
 
   test("복구 puts an excluded sender back in the list", async ({ page }) => {
