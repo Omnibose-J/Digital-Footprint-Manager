@@ -545,4 +545,41 @@ test.describe("the page a logged-out visitor lands on", () => {
     await expect(page.locator("body")).not.toContainText("도메인 후보 저장");
     await expect(page.locator("body")).not.toContainText("내 계정 아님");
   });
+
+  test("signing in is counted, and says nothing about who signed in", async ({ page }) => {
+    // logged_out shipped without this, so its rate had no denominator: nothing measured how many
+    // arrivals became sessions. Sign-in is also the step before any mail is reachable at all.
+    await installFakeGoogle(page, { account: SELF, messages: [] });
+    await page.route("**/api/me", (route) => route.fulfill({ json: { loggedIn: false } }));
+    await page.addInitScript(() => {
+      const id = window.google.accounts.id;
+      const initialize = id.initialize;
+      id.initialize = (cfg) => {
+        window.__credentialCallback = cfg.callback;
+        return initialize(cfg);
+      };
+    });
+    await page.goto("/");
+    await expect(page.locator("#loginPanel")).toBeVisible();
+
+    await page.route("**/api/auth/login", (route) => route.fulfill({ json: { ok: true } }));
+    await page.route("**/api/me", (route) =>
+      route.fulfill({ json: { loggedIn: true, email: SELF, name: "테스터" } })
+    );
+    await page.evaluate(() => window.__credentialCallback({ credential: "jwt-for-tester" }));
+    await expect(page.locator("#appPanel")).toBeVisible();
+
+    const events = () =>
+      page.evaluate(() =>
+        (window.dataLayer || [])
+          .map((a) => Array.from(a))
+          .filter((a) => a[0] === "event")
+          .map((a) => ({ name: a[1], params: a[2] }))
+      );
+    expect((await events()).filter((e) => e.name === "logged_in")).toEqual([
+      { name: "logged_in", params: {} },
+    ]);
+    const serialised = JSON.stringify(await page.evaluate(() => window.dataLayer.map((a) => Array.from(a))));
+    expect(serialised, `${SELF} reached the dataLayer`).not.toContain(SELF);
+  });
 });

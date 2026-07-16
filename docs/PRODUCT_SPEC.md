@@ -297,7 +297,7 @@ Do not introduce an LLM into discovery. Start with deterministic signals, the en
 | Product-account deletion | Primary DB within 24 hours | Verify the DB provider expires backups within 30 days before launch |
 | Security logs | 30 days | No email, subject, token, or message identifier |
 
-Controls: just-in-time disclosure before OAuth; least privilege and incremental authorization; TLS and encryption at rest; CSP with `connect-src` restricted to the app, Google OAuth, and the Gmail API; no third-party analytics on scan and cleanup screens; automated secret/PII redaction in logs and errors.
+Controls: just-in-time disclosure before OAuth; least privilege and incremental authorization; TLS and encryption at rest; CSP with `connect-src` restricted to the app, Google OAuth, and the Gmail API; no mailbox-derived identifier in analytics — no domain, service name, sender address, or subject, enforced by a key-and-value allowlist and its tests, while aggregate counts leave knowingly (§8); automated secret/PII redaction in logs and errors.
 
 ## 7. Validation Gates
 
@@ -424,6 +424,18 @@ Its architecture also collides with §5 independently of the credential question
 **Instead — a Gmail deep link:** `https://mail.google.com/mail/u/{email}/#search/from%3A{domain}` opens the user's own Gmail with the sender pre-searched; they select and delete. Zero new scope, zero irreversible action by us, and it is the §4 boundary applied unchanged — the product prepares, routes, and explains; the user acts on the official surface, exactly as it does for account deletion itself. Verify the `u/{email}` form resolves the right account for multi-account users before shipping; `u/0` is an index and can open the wrong one.
 
 **Rejected:** `gmail.modify` behind incremental authorization (defers the consent cost, does not reduce the granted authority). Framing it as "trash only" (no such scope). Permanent delete via `https://mail.google.com/` (same objection, larger).
+
+**Status:** Active
+
+### Decision: Analytics is bounded by identifier, not by screen - 2026-07-16
+
+**Context:** §6 shipped 2026-07-15 with a control reading "no third-party analytics on scan and cleanup screens." Google Analytics landed the next day with a boundary its tests enforce, and that sentence was never revisited. The spec and the code have contradicted each other since, and an audit found the contradiction — correctly — before this entry existed. The argument for the change lived only in a comment at the top of `analytics.js`, which is not where this project keeps its reversals.
+
+**Why the screen rule could not stand:** it scopes to screens this product does not have. §2 describes a Next.js App Router experience; what shipped is one static page, so "the scan and cleanup screens" is the entire app and the rule fences nothing. It also names a vendor and a location rather than the thing at risk. What the user hands over is their mailbox, and a rule about *where a tag loads* says nothing about *what it carries*.
+
+**The rule that replaces it:** no identifier read out of the mailbox leaves the browser — not a domain, not a service name, not a sender address, not a subject. `analytics.js` allowlists parameter keys *and* their values against enums this product authored, so an unlisted value cannot ride in on a listed key; `analytics.test.js` proves it instead of a comment asserting it. Aggregate counts — how many messages were read, how many candidates came back — do leave, knowingly. That is a weak fact about a mailbox, and it is what the §7 gates are measured with. Claiming otherwise would be a lie about the code.
+
+**Rejected:** Deleting GA to satisfy the sentence as written — the funnel is the only evidence the §7 gates are met, and a screen rule protects nothing an identifier rule does not protect better. Keeping §6 unamended and leaving the reasoning in a code comment — the absence of an entry here is exactly what let the contradiction stand.
 
 **Status:** Active
 

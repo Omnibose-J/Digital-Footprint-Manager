@@ -397,6 +397,10 @@ async function handleCredentialResponse(response) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.statusText);
     await refreshMe();
+    // The funnel's denominator. logged_out has been counted since it shipped, which left its rate
+    // unreadable: there was no measure of how many arrivals became sessions at all. Product
+    // sign-in is not mailbox access (§6), and this carries nothing about one.
+    track("logged_in", {});
   } catch (e) {
     err.textContent = String(e.message || e);
     loginStatus.textContent = "로그인 실패";
