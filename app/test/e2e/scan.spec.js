@@ -396,6 +396,45 @@ test.describe("the scan a user actually sees", () => {
     }
   });
 
+  test("a label reaches the API carrying the score we showed when they answered", async ({ page }) => {
+    // §8 stores the band beside the label because the measurement is "we said 정리 권장 and they
+    // said 사용". If the client posts the label alone, that comparison is unrecoverable later — the
+    // rules will have moved and nothing records what the user was actually answering.
+    const view = await runScan(page);
+    const spotify = view.services.find((s) => s.domain === "spotify.com");
+
+    const [req] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes("/api/choices/") && r.method() === "PUT"),
+      page.locator("#rows tr", { hasText: "spotify.com" }).locator('button[data-choice="delete"]').click(),
+    ]);
+
+    expect(req.url()).toContain("/api/choices/spotify.com");
+    const body = req.postDataJSON();
+    expect(body.choice).toBe("unused");
+    expect(typeof body.cleanupScore).toBe("number");
+    // The number on screen and the number posted are the same number.
+    expect(String(body.cleanupScore)).toBe(/\d+/.exec(spotify.priority)[0]);
+    expect(body.cleanupBand).toBe("review");
+    expect(body.discoveryBand).toBe("high");
+  });
+
+  test("a failed save puts the row back instead of lying about it", async ({ page }) => {
+    // The label is optimistic, so the one thing that must not happen is a row that looks answered
+    // while the server never heard it: the user would have no reason to try again.
+    await runScan(page);
+    await page.route("**/api/choices/*", (route) =>
+      route.request().method() === "PUT" ? route.fulfill({ status: 500, json: {} }) : route.fallback()
+    );
+
+    const row = page.locator("#rows tr", { hasText: "spotify.com" });
+    await row.locator('button[data-choice="delete"]').click();
+
+    await expect(page.locator("#err")).toContainText("저장하지 못했습니다");
+    // and the 미사용 tab did not gain a row it cannot back up
+    await page.click("#tabUnused");
+    await expect(page.locator("#unusedRows tr", { hasText: "spotify.com" })).toHaveCount(0);
+  });
+
   test("a row we are not sure about shows a dash, not a rank of zero", async ({ page }) => {
     // "Not ranked" and "ranked last" are different sentences. §4 scores only high-band.
     //

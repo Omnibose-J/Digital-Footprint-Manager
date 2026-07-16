@@ -91,38 +91,51 @@ let sessionEmail = "";
 /** The Gmail account the scan actually read, from users/me/profile. Not sessionEmail. */
 let scannedAccount = "";
 
-const CHOICE_STORAGE_KEY = "dfm-cleanup-choices-v1";
 const DONE_STORAGE_KEY = "dfm-unsubscribe-done-v1";
-/** @type {Record<string, "keep"|"delete">} domain -> choice (keep=사용, delete=미사용) */
-let cleanupChoices = loadCleanupChoices();
+/**
+ * @type {Record<string, "keep"|"delete">} domain -> choice (keep=사용, delete=미사용)
+ *
+ * Server-owned, loaded per session. This lived in localStorage until §8's storage decision caught up
+ * with it: Safari evicts first-party storage on a 7-day no-interaction timer and a device switch is
+ * total loss, and a label is the one thing a re-scan cannot rebuild. There is deliberately no
+ * localStorage fallback — a fallback here would keep the screen looking right while the thing it
+ * promises to remember quietly did not persist.
+ */
+let cleanupChoices = {};
 /** @type {Record<string, true>} domain -> completed unsubscribe */
 let doneByDomain = loadDoneByDomain();
 /** @type {"all"|"unused"} */
 let activeTab = "all";
 
-function loadCleanupChoices() {
+/** Reverse of CHOICE_TO_SPEC: the API speaks §3, the row speaks keep/delete. */
+const SPEC_TO_CHOICE = { in_use: "keep", unused: "delete" };
+
+/**
+ * Load this user's labels. Returns {} for a signed-out visitor, which is the correct empty answer
+ * and not a failure — the labels are keyed to a session that does not exist yet.
+ */
+async function fetchChoices() {
+  let data;
   try {
-    const raw = localStorage.getItem(CHOICE_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
-    const out = {};
-    for (const [domain, value] of Object.entries(parsed)) {
-      const d = normalizeDomain(domain);
-      if (d && (value === "keep" || value === "delete")) out[d] = value;
-    }
-    return out;
-  } catch {
+    const res = await fetch("/api/choices");
+    if (res.status === 401) return {};
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    data = await res.json();
+  } catch (e) {
+    // Loud, because the silent version is cruel: an empty list is indistinguishable from "you never
+    // labelled anything", so the user re-answers questions they already answered and never learns
+    // their earlier answers still exist on the server.
+    err.textContent = "저장된 선택을 불러오지 못했습니다. 새로고침하면 다시 시도합니다.";
+    console.warn("[choices] load failed", e);
     return {};
   }
-}
-
-function saveCleanupChoices() {
-  try {
-    localStorage.setItem(CHOICE_STORAGE_KEY, JSON.stringify(cleanupChoices));
-  } catch {
-    /* private mode / quota — choice still works for this session */
+  const out = {};
+  for (const [domain, value] of Object.entries(data?.choices || {})) {
+    const d = normalizeDomain(domain);
+    const c = SPEC_TO_CHOICE[value?.choice];
+    if (d && c) out[d] = c;
   }
+  return out;
 }
 
 function loadDoneByDomain() {
@@ -162,15 +175,56 @@ function getChoice(domain) {
   return d ? cleanupChoices[d] || null : null;
 }
 
-function setChoice(domain, choice) {
+/**
+ * Apply the label locally, then persist it.
+ *
+ * Optimistic on purpose: the row has to answer the click now, and a spinner on a two-state toggle is
+ * worse than the rare rollback below. `item` carries the scores AS SHOWN — §8 stores them beside the
+ * label because "we said 정리 권장 and they said 사용" is the whole measurement, and it stops meaning
+ * anything once the scoring rules move.
+ *
+ * @param {string} domain
+ * @param {"keep"|"delete"} choice
+ * @param {any} [item] the candidate as rendered, for the scores we showed
+ */
+async function setChoice(domain, choice, item) {
   const d = normalizeDomain(domain);
   if (!d || (choice !== "keep" && choice !== "delete")) return;
+
+  const previousChoice = cleanupChoices[d];
+  const previousDone = doneByDomain[d];
   cleanupChoices[d] = choice;
-  saveCleanupChoices();
   // Leaving the unused list clears the done check for that domain.
   if (choice !== "delete" && doneByDomain[d]) {
     delete doneByDomain[d];
     saveDoneByDomain();
+  }
+
+  try {
+    const res = await fetch(`/api/choices/${encodeURIComponent(d)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        choice: CHOICE_TO_SPEC[choice],
+        cleanupScore: item?.cleanupScore ?? null,
+        cleanupBand: item?.cleanupBand ?? null,
+        discoveryScore: item?.discoveryScore ?? null,
+        discoveryBand: item?.discoveryBand ?? null,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (e) {
+    // Put the row back where it was. A label that looks saved and is not is the one outcome worth
+    // undoing a click for: the user would never know to answer it again.
+    if (previousChoice) cleanupChoices[d] = previousChoice;
+    else delete cleanupChoices[d];
+    if (previousDone) {
+      doneByDomain[d] = previousDone;
+      saveDoneByDomain();
+    }
+    err.textContent = "선택을 저장하지 못했습니다. 다시 눌러 주세요.";
+    console.warn("[choices] save failed", e);
+    if (lastSnapshot) renderSnapshot(lastSnapshot);
   }
 }
 
@@ -612,8 +666,17 @@ function closeGuide() {
 async function refreshMe() {
   const res = await fetch("/api/me");
   const data = await res.json();
-  if (data.loggedIn) setLoggedInUI(data);
-  else setLoggedOutUI();
+  if (data.loggedIn) {
+    setLoggedInUI(data);
+    cleanupChoices = await fetchChoices();
+  } else {
+    setLoggedOutUI();
+    // Signing out drops the labels from memory, not just from the screen. They belong to a session,
+    // and the next person at this browser must not inherit the last one's answers — the same rule
+    // the scan already follows for its table.
+    cleanupChoices = {};
+  }
+  if (lastSnapshot) renderSnapshot(lastSnapshot);
   return data;
 }
 
@@ -735,7 +798,11 @@ rows?.addEventListener("click", (ev) => {
     const domain = choiceBtn.getAttribute("data-domain") || "";
     const choice = choiceBtn.getAttribute("data-choice");
     if (!domain || (choice !== "keep" && choice !== "delete")) return;
-    setChoice(domain, choice);
+    // The row as it stands right now: setChoice stores the scores we were showing when they answered.
+    const item = lastSnapshot?.services?.find(
+      (s) => normalizeDomain(s.registrableDomain) === normalizeDomain(domain)
+    );
+    setChoice(domain, choice, item);
     track(choice === "delete" ? "mark_delete" : "mark_keep", { domain });
     if (lastSnapshot) renderSnapshot(lastSnapshot);
     return;

@@ -92,6 +92,34 @@ export async function installFakeGoogle(page, { account = "tester@gmail.com", me
     route.fulfill({ json: { loggedIn: true, email: account, name: "테스터" } })
   );
 
+  /**
+   * The label store, faked at the same layer /api/me already is.
+   *
+   * This harness has no server session — it fulfils /api/me itself rather than minting a cookie —
+   * so the real /api/choices would 401 every write and the screen would roll every label back. The
+   * routes, their auth and their ownership checks are covered against the real createApp in
+   * choices.test.js; what these tests own is the screen: that a click reaches the API with the
+   * scores we were showing, and that what comes back on load lands on the right rows.
+   */
+  const labels = new Map();
+  await page.route("**/api/choices", (route) =>
+    route.fulfill({ json: { choices: Object.fromEntries(labels) } })
+  );
+  await page.route("**/api/choices/*", (route) => {
+    const req = route.request();
+    const domain = decodeURIComponent(req.url().split("/api/choices/")[1] || "");
+    if (req.method() === "PUT") {
+      const body = req.postDataJSON() || {};
+      labels.set(domain, { choice: body.choice, labeledAt: "2026-07-16T00:00:00.000Z" });
+      return route.fulfill({ json: { ok: true } });
+    }
+    if (req.method() === "DELETE") {
+      labels.delete(domain);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ status: 405, json: {} });
+  });
+
   // E2E must not call the real Gemini API. Empty results = safe rule-only fallback.
   await page.route("**/api/classify-senders", (route) =>
     route.fulfill({ json: { results: {} } })
