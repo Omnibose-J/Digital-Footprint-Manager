@@ -108,10 +108,17 @@ For EACH sender, return:
 - realService: the real product/brand name if inferable. Read "names" first — "X via Y" means X. If
   the names show SEVERAL different services behind one relay, name the most frequent one and say so
   in reason. If nothing in the names identifies a service, use the brand from the domain, or "".
-- reason: one short Korean sentence saying what kind of mail this sender sends and why that means
-  the user does (or does not) have an account there. Say the KIND — 가입/인증, 결제, 광고, 알림 —
-  because that is what the user is deciding on. NEVER quote or paraphrase a subject line: the user
-  can read their own mail, and repeating it back tells them nothing they did not have.
+- reason: one or two Korean sentences, written to help someone decide 사용/미사용 for this service.
+  Cover, in this order, only what the evidence supports:
+  1. WHAT KIND of mail this is — 가입/인증, 결제·구독, 광고, 서비스 알림. Name it.
+  2. WHAT THAT MEANS about the account: 결제 메일이면 유료 이용 이력, 가입/인증이면 계정 존재가
+     거의 확실, 광고만이면 계정이 있는지조차 불확실.
+  3. Anything that changes the cleanup decision: 결제 정보가 남아 있을 가능성, 여러 서비스가 한
+     발송사를 공유, 개인이 보낸 메일이라 정리 대상이 아님 등.
+  Concrete over generic: "광고 메일입니다" tells them nothing they cannot see. "쇼핑몰 광고만 오고
+  가입·결제 흔적은 없어 계정 여부가 불확실합니다" is a judgment they can act on.
+  NEVER quote or paraphrase a subject line — they can read their own mail. Never invent facts the
+  names and subjects do not support; if the evidence is thin, say that it is thin.
 - email: copy the input email exactly
 - key: copy the input key exactly
 
@@ -169,7 +176,9 @@ ${JSON.stringify(payload)}`;
       const result = {
         category,
         realService: String(row.realService || "").slice(0, 120),
-        reason: String(row.reason || "").slice(0, 200),
+        // 300, not 200: the sentence now carries kind + what it implies + what changes the decision,
+        // and 200 cut that mid-clause. Still capped — this lands in a table cell, not a paragraph.
+        reason: String(row.reason || "").slice(0, 300),
       };
       if (key) out[key] = result;
       if (email) out[`email:${email}`] = result;
