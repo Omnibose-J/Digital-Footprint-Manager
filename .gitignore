@@ -24,3 +24,8 @@ sow/
 # Playwright
 app/test-results/
 app/playwright-report/
+
+# Vercel project link (local). The repo root is linked now, not app/: Root Directory is set to `app`
+# in the project settings, so a deploy runs from here and Vercel enters app/ itself. Deploying from
+# inside app/ would make it look for app/app/.
+.vercel
