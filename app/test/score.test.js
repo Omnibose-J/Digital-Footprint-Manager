@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { computeDiscoveryScore, computeLikelyClosed } from "../frontend/score.js";
-import { classifyMessage } from "../frontend/filter.js";
+import { computeDiscoveryScore, computeLikelyClosed } from "../core/score.js";
+import { classifyMessage } from "../core/filter.js";
 
 describe("SOW 004 R3 discoveryScore", () => {
   it("verification 55 + reset 35 → 90 high", () => {

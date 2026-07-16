@@ -2,7 +2,7 @@
 title: Digital Footprint Manager - Core MVP Specification
 version: 2.0
 as_of: 2026-07-15
-status: Proposed MVP, descoped to the core loop (full v1 archived as PRODUCT_SPEC_v1_full.md)
+status: Proposed MVP, descoped to the core loop (full v1 archived as archive/product-spec-v1-full.md)
 audience: Product and implementation agents
 language: English for agent readability; user-facing UI remains Korean
 ---
@@ -324,7 +324,7 @@ The market research this section keeps citing lived in `BENCHMARK.md`, deleted 2
 
 **Context:** v1 specified cleanup-priority scoring, breach-data integration, reminders, monetization, and a 7-state cleanup machine. The owner directed focus onto the core: find registered sites, guide deletion of unwanted ones.
 
-**Why:** Priority scoring depended on breach data with no MVP source (its `immediate` band was unreachable); reminders required Cron plus an email provider for marginal value; every cut item can be layered back after the core loop proves out. Full detail preserved in PRODUCT_SPEC_v1_full.md.
+**Why:** Priority scoring depended on breach data with no MVP source (its `immediate` band was unreachable); reminders required Cron plus an email provider for marginal value; every cut item can be layered back after the core loop proves out. Full detail preserved in archive/product-spec-v1-full.md.
 
 **Rejected:** Keeping priority scoring with self-reported inputs (adds a questionnaire UI before the core value is proven). Keeping reminders (infrastructure cost without evidence users need them).
 
@@ -401,7 +401,7 @@ The market research this section keeps citing lived in `BENCHMARK.md`, deleted 2
 
 **Rejected:** Shipping IMAP behind "we only read headers" (the credential we would hold grants everything, regardless of what we read). Waiting for a Naver mail API (none exists; none is announced).
 
-**Amended 2026-07-15 — a concrete IMAP design was evaluated and does not clear this decision.** An implementation-ready design now exists (`NAVER_IMAP_DESIGN_deferred.md`: server-side ephemeral IMAP, FastAPI worker, envelope-encrypted credential in Redis at 15-minute TTL, `EXAMINE INBOX`, `BODY.PEEK` header-only fetch). It is technically sound and independently reaches this spec's own conclusions — Naver Login OAuth grants no mailbox access, IMAP is the only path, and its §36 warns against inferring signup from sender domain alone. Three objections survive it, none of which its security engineering touches:
+**Amended 2026-07-15 — a concrete IMAP design was evaluated and does not clear this decision.** An implementation-ready design now exists (`archive/naver-imap-design.md`: server-side ephemeral IMAP, FastAPI worker, envelope-encrypted credential in Redis at 15-minute TTL, `EXAMINE INBOX`, `BODY.PEEK` header-only fetch). It is technically sound and independently reaches this spec's own conclusions — Naver Login OAuth grants no mailbox access, IMAP is the only path, and its §36 warns against inferring signup from sender domain alone. Three objections survive it, none of which its security engineering touches:
 
 - **TTL and encryption bound leak risk, not authority.** A Naver app password opens SMTP as well as IMAP, so custody of it means the user handed us send-as rights — regardless of our decision to read only headers. Shortening the TTL does not change what the credential grants.
 - **It reproduces the externality that killed vault import** (see that decision above): teaching users to paste a Naver app password into a web form hands attackers a working phishing template, and the harm lands on people who never used this product. The design's own §25 error copy ("check that you entered an app password, not your normal password") concedes that confused users will send us their real Naver password, and §0's ban on collecting it is a UI label with no enforcing mechanism.

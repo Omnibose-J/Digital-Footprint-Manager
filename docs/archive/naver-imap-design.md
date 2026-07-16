@@ -1,6 +1,6 @@
 > **STATUS: DEFERRED — NOT AN APPROVED PLAN. DO NOT IMPLEMENT FROM THIS DOCUMENT.**
 >
-> Evaluated 2026-07-15 against `PRODUCT_SPEC.md` §8 ("No Naver/Daum mailbox support in the MVP;
+> Evaluated 2026-07-15 against `../PRODUCT_SPEC.md` §8 ("No Naver/Daum mailbox support in the MVP;
 > validate the mailbox mix first") and **rejected for now**. The engineering here is sound and
 > independently reaches this project's own research conclusions. The problem is not quality: the
 > product decision this design assumes was already made the other way, and the design does not

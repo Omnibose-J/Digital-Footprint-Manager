@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 import { OAuth2Client } from "google-auth-library";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const publicDir = path.resolve(__dirname, "..", "frontend");
+// Each asset dir is mounted by name. Serving app/ wholesale would expose .env and this source.
+const webDir = path.resolve(__dirname, "..", "web");
+const coreDir = path.resolve(__dirname, "..", "core");
+const dataDir = path.resolve(__dirname, "..", "data");
 const port = Number(process.env.PORT || 3456);
 const gaMeasurementId = process.env.GA_MEASUREMENT_ID || "";
 const clientId = process.env.GOOGLE_CLIENT_ID || "";
@@ -213,7 +216,9 @@ app.post("/api/auth/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-app.use(express.static(publicDir));
+app.use(express.static(webDir));
+app.use("/core", express.static(coreDir));
+app.use("/data", express.static(dataDir));
 
 // On Vercel the platform invokes the exported app; binding a port there would hang the build.
 if (!process.env.VERCEL) {

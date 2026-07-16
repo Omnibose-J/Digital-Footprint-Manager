@@ -7,9 +7,9 @@ import {
   shouldRetryGmail,
   collectSenders,
   scanFraction,
-} from "../frontend/scan.js";
-import { authVerdict } from "../frontend/authenticity.js";
-import { createAggregator } from "../frontend/filter.js";
+} from "../core/scan.js";
+import { authVerdict } from "../core/authenticity.js";
+import { createAggregator } from "../core/filter.js";
 
 /**
  * Stub Gmail so collectSenders can be driven end to end. `perMessage` decides what each

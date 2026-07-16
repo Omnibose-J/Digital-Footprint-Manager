@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { computeCleanupScore, monthsSince, bandForCleanup, inUseSignal } from "../frontend/cleanup.js";
+import { computeCleanupScore, monthsSince, bandForCleanup, inUseSignal } from "../core/cleanup.js";
 
 const NOW = new Date("2026-07-16T00:00:00Z");
 

@@ -11,5 +11,5 @@ token.json
 *.local
 
 # Playwright
-prototype/test-results/
-prototype/playwright-report/
+app/test-results/
+app/playwright-report/

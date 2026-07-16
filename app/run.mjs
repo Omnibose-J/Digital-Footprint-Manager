@@ -44,9 +44,9 @@ function isPortOpen(port) {
 }
 
 /**
- * Port open ≠ DFM healthy. After public/ → frontend/ renames, a leftover
- * `src/server.js` still answers /api/* but serves 404 for /. Treating that as
- * "already running" opens a blank page and looks like the app is broken.
+ * Port open ≠ DFM healthy. Each static-root rename (public/ → frontend/ → web/)
+ * leaves an older server able to answer /api/* while serving 404 for /. Treating
+ * that as "already running" opens a blank page and looks like the app is broken.
  */
 async function isDfmUiHealthy(port) {
   try {
@@ -127,7 +127,7 @@ async function main() {
     }
     fail(
       `Port ${port} is in use, but GET / is not the DFM UI (often an old ` +
-        `src/server.js left over after public/ → frontend/).\n\n` +
+        `server left over from an earlier static root).\n\n` +
         `  Stop the process holding ${port}, then run again.\n` +
         `    Windows : Get-NetTCPConnection -LocalPort ${port} | Select OwningProcess\n` +
         `              Stop-Process -Id <pid> -Force\n` +
@@ -151,7 +151,7 @@ async function main() {
 
   // 4. Server.
   console.log(`Starting the server on ${url} ...\n`);
-  const child = spawn("node", ["backend/server.js"], { cwd: root, stdio: "inherit" });
+  const child = spawn("node", ["server/server.js"], { cwd: root, stdio: "inherit" });
 
   const shutdown = () => {
     if (child.exitCode === null) child.kill();

@@ -2,7 +2,7 @@
 
 > **"인터넷에 남긴 나의 흔적을 찾아 정리하는 디지털 청소 서비스"**
 
-**바로 실행하기:** `prototype/run.cmd` 를 더블클릭하거나 `node prototype/run.mjs`
+**바로 실행하기:** `app/run.cmd` 를 더블클릭하거나 `node app/run.mjs`
 
 ## 1. 문제의식
 
@@ -183,16 +183,24 @@
 ## 9. 개발자용
 
 ```
-prototype/
-  frontend/    브라우저에서 도는 전부 (스캔, 분류, 점수, 화면)
-  backend/     로그인과 설정만. 메일은 만지지 않음
-  test/        유닛 146개 + e2e 18개
+app/
+  core/      메일에서 계정을 찾아내는 판단 전부 (스캔, 분류, 점수, 정리 우선도, 탈퇴 안내 렌더)
+             유닛 테스트가 겨냥하는 곳. 브라우저에 /core 로 서빙된다
+  web/       화면 배선만. DOM 이벤트를 core 함수에 연결한다
+  data/      catalog.json — 탈퇴 경로 카탈로그. /data 로 서빙된다
+  server/    로그인과 설정만. 메일은 만지지 않음
+  test/      유닛(test/*.test.js) + e2e(test/e2e/, 가짜 Gmail로 실제 앱 구동)
+docs/LLM_PROJECT_MAP.md     어느 파일이 무엇을 소유하는지
+docs/PRODUCT_SPEC.md        제품 계약서. §8에 결정 기록
+docs/archive/               보류·대체된 문서. 여기 있는 건 유효하지 않다
 docs/tracking/findings.md   알고 있지만 아직 안 고친 것들
-PRODUCT_SPEC.md             제품 계약서. §8에 결정 기록
 ```
 
+의존은 **web → core 한 방향**이다. `core/` 안에서 `web/` 을 import하는 파일은 없고, 그래서
+core는 브라우저 없이 Node에서 그대로 유닛 테스트된다. 화면에 꽂는 일은 `web/app.js`가 한다.
+
 ```bash
-cd prototype
+cd app
 npm install
 cp .env.example .env     # GOOGLE_CLIENT_ID 채우기
 npm test                 # 유닛

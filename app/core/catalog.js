@@ -112,7 +112,7 @@ export function upgradeSnapshot(snapshot, catalog, now = new Date()) {
 }
 
 /** Fetch the static catalog asset. */
-export async function loadCatalog(fetchImpl = fetch, url = "./catalog.json") {
+export async function loadCatalog(fetchImpl = fetch, url = "/data/catalog.json") {
   const res = await fetchImpl(url);
   if (!res.ok) throw new Error(`catalog load failed: ${res.status}`);
   return res.json();

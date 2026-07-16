@@ -5,7 +5,7 @@ import {
   renderRequestTemplate,
   renderGuideHtml,
   gmailSearchUrl,
-} from "../frontend/guide.js";
+} from "../core/guide.js";
 
 describe("guide template (E6)", () => {
   it("masks account as so****@gmail.com shape", () => {

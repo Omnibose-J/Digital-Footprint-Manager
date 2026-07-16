@@ -1,10 +1,11 @@
-import { collectSenders, scanFraction } from "./scan.js";
-import { createAggregator } from "./filter.js";
-import { loadCatalog, upgradeSnapshot, isStale } from "./catalog.js";
-import { renderGuideHtml, renderRequestTemplate, maskAccount } from "./guide.js";
-import { applyUserVerdict, sortBuckets } from "./verdict.js";
-import { escapeHtml } from "./html.js";
-import { initAnalytics, track } from "./analytics.js";
+// core/ is served from /core (server.js mounts it); the browser resolves these as URLs, not paths.
+import { collectSenders, scanFraction } from "/core/scan.js";
+import { createAggregator } from "/core/filter.js";
+import { loadCatalog, upgradeSnapshot, isStale } from "/core/catalog.js";
+import { renderGuideHtml, renderRequestTemplate, maskAccount } from "/core/guide.js";
+import { applyUserVerdict, sortBuckets } from "/core/verdict.js";
+import { escapeHtml } from "/core/html.js";
+import { initAnalytics, track } from "/core/analytics.js";
 
 function el(id) {
   return document.getElementById(id);

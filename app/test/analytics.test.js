@@ -13,7 +13,7 @@ async function loadAnalytics() {
   const head = { appendChild() {} };
   globalThis.window = { dataLayer: [] };
   globalThis.document = { createElement: () => ({}), head };
-  const mod = await import(`../frontend/analytics.js?t=${Math.random()}`);
+  const mod = await import(`../core/analytics.js?t=${Math.random()}`);
   mod.initAnalytics("G-TEST");
   // gtag pushes arguments objects onto dataLayer; read the events back out of it.
   const events = () =>
@@ -85,7 +85,7 @@ describe("analytics never carries anything read out of the mailbox", () => {
   it("sends nothing at all without a measurement id", async () => {
     globalThis.window = { dataLayer: [] };
     globalThis.document = { createElement: () => ({}), head: { appendChild() {} } };
-    const mod = await import(`../frontend/analytics.js?t=${Math.random()}`);
+    const mod = await import(`../core/analytics.js?t=${Math.random()}`);
     mod.initAnalytics("");
     mod.track("scan_completed", { messages: 811 });
     assert.equal(window.dataLayer.length, 0);
@@ -101,7 +101,7 @@ describe("analytics never carries anything read out of the mailbox", () => {
       globalThis.window = { dataLayer: [] };
       globalThis.document = { createElement: () => ({}), head: { appendChild() {} } };
       globalThis.location = { hostname };
-      const mod = await import(`../frontend/analytics.js?t=${Math.random()}`);
+      const mod = await import(`../core/analytics.js?t=${Math.random()}`);
       mod.initAnalytics("G-TEST");
       return window.dataLayer.map((a) => Array.from(a)).find((a) => a[0] === "config")[2];
     };

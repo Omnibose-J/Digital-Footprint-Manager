@@ -7,9 +7,9 @@ import {
   registrableDomainFromHost,
   parseFromHeader,
   marketingHeaderWeight,
-} from "../frontend/filter.js";
-import { applyUserVerdict } from "../frontend/verdict.js";
-import { PAYMENT_GATEWAY_DOMAINS } from "../frontend/filter.rules.js";
+} from "../core/filter.js";
+import { applyUserVerdict } from "../core/verdict.js";
+import { PAYMENT_GATEWAY_DOMAINS } from "../core/filter.rules.js";
 
 function msg({
   from,

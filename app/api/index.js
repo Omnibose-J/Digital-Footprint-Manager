@@ -1,2 +1,2 @@
 /** Vercel Function entry. All /api/* traffic is rewritten here (see vercel.json). */
-export { default } from "../backend/server.js";
+export { default } from "../server/server.js";
