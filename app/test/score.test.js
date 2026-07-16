@@ -177,16 +177,18 @@ describe("SOW 004 R5 likely_closed", () => {
     );
   });
 
-  it("an authenticated closure still closes when a forged one sits beside it", () => {
+  it("a forged closure newer than the authenticated one cannot extend the conclusion", () => {
+    // The forged 2024-09 straddles the 2024-07 signup: reading families would close this account,
+    // reading only the authenticated 2024-06 does not. That gap is the whole fix.
     assert.equal(
       computeLikelyClosed(
         {
-          signup: { months: ["2023-01"], count: 1 },
+          signup: { months: ["2024-07"], count: 1 },
           closure: { months: ["2024-06", "2024-09"], count: 2 },
         },
         ["2024-06"]
       ),
-      true
+      false
     );
   });
 });

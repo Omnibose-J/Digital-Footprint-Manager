@@ -569,6 +569,14 @@ scanBtn?.addEventListener("click", async () => {
       signal: abortScan.signal,
       onProfile: ({ account }) => {
         aggregator = createAggregator({ selfEmail: account || "" });
+        // aggregator above is this scan's own local, so a stale scan may keep filling it. The line
+        // below is not: scannedAccount is module state the next session inherits, which is why
+        // setLoggedOutUI clears it, and a profile resolving after logout would write it back.
+        // Nothing reaches it that way today — while this request is in flight the scan never
+        // settles, so scanBtn stays disabled, so the next user cannot scan, so there is no row to
+        // open the guide that renders this address. That is two unrelated mechanisms happening to
+        // cover it, not a rule. This guard is the rule.
+        if (myScan !== scanGeneration) return;
         // The mailbox we actually read, which is not necessarily the one signed into the product.
         // The Gmail token comes from a separate consent that offers its own account chooser, so a
         // multi-account user can sign in as one and scan another. SOW 005 R7 already established
@@ -690,7 +698,9 @@ async function boot() {
   config = await cfgRes.json();
   if (!cfgRes.ok) throw new Error(config.error || "config failed");
 
-  // Empty GA_MEASUREMENT_ID disables analytics entirely, which is what the e2e runs with.
+  // Empty GA_MEASUREMENT_ID disables analytics entirely. The e2e does NOT run that way: the
+  // harness serves a fake id and stubs gtag.js, so the boundary in analytics.js is exercised in a
+  // real browser instead of only against a fake window in the unit tests.
   initAnalytics(config.gaMeasurementId);
 
   try {

@@ -174,7 +174,9 @@ function bandForScore(score) {
  * candidate on the list, never hide one, so an unauthenticated positive fails in the safe
  * direction; an unauthenticated closure does not.
  */
-export function computeLikelyClosed(families = {}, authenticatedClosureMonths = []) {
+export function computeLikelyClosed(families = {}, authenticatedClosureMonths) {
+  // No default: a caller that forgets the gated months should throw here, not quietly get "no
+  // closure ever". The safe direction is not a reason to let the ungated path be reachable.
   const closureMonths = authenticatedClosureMonths;
   if (!closureMonths.length) return false;
   const latestClosure = maxMonth(closureMonths);

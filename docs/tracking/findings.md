@@ -139,6 +139,27 @@ carve-out. The phrases are tagged in `filter.rules.js` so the change has somewhe
 **Blast radius:** a dormant Korean account whose only surviving evidence is its 휴면 notice scores
 15 and sorts to the bottom, when it is exactly the account this product exists to surface.
 
+## Logging out mid-scan leaves the next user's scan button disabled (2026-07-16)
+
+`scanBtn.disabled = false` only runs in the scan handler's `finally` (`web/app.js`), and a scan
+does not settle while its Gmail request is outstanding — the abort signal is checked between
+steps, not inside `fetch`, which never gets the signal. So from logout until Gmail answers the
+in-flight `users/me/profile` or `users/me/messages`, the next person to sign in sees a dead
+"Gmail 연결하고 스캔" button with no explanation. Adding 5xx retry widened this: a profile that
+would have thrown at once now waits out 300/600/1200ms of backoff first.
+
+Found while trying to reproduce a suspected `scannedAccount` leak through the guide modal; the
+disabled button is what made that scenario unreproducible, so this is load-bearing behavior
+nobody designed.
+
+Not fixed here because the fix is a decision, not a line: either `setLoggedOutUI` re-enables the
+button (then a stale scan's `finally` can disable it again — the same generation problem, one
+layer down), or the scan handler stops owning the button's state. Both are wider than the leak
+this session set out to close.
+
+**Blast radius:** bounded by how long Gmail takes to answer one request — seconds normally. It is
+a confusing dead button, not a leak, and a page refresh clears it.
+
 ## Every deployed file is also a public URL (2026-07-16, mitigated except server/)
 
 Vercel serves an uploaded file directly whenever one matches the request path; the `/(.*)` → `/api`
