@@ -40,11 +40,14 @@ function compareByScoreThenCount(a, b) {
   const sa = a.discoveryScore || 0;
   const sb = b.discoveryScore || 0;
   if (sb !== sa) return sb - sa;
-  return b.messageCount - a.messageCount;
+  // Fewest mails first. This used to be most-first, on the theory that volume is interest — but the
+  // list asks "do you still use this", and a service that sent twice is the one the user is least
+  // likely to remember signing up for. The loud ones need no help being remembered.
+  return a.messageCount - b.messageCount;
 }
 
 function compareByCount(a, b) {
-  return b.messageCount - a.messageCount;
+  return a.messageCount - b.messageCount;
 }
 
 /**

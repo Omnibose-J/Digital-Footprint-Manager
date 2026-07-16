@@ -348,6 +348,10 @@ function unusedServicesFromSnapshot(snapshot) {
       const da = isStatusOn(a.registrableDomain, "withdrawn") ? 1 : 0;
       const db = isStatusOn(b.registrableDomain, "withdrawn") ? 1 : 0;
       if (da !== db) return da - db;
+      // Fewest mails first, same as the 후보 list: the service that sent twice is the one the user
+      // is least sure about, and this tab is where they act. Domain breaks ties so the order is
+      // total — two services with the same count must not swap places between renders.
+      if (a.messageCount !== b.messageCount) return a.messageCount - b.messageCount;
       return normalizeDomain(a.registrableDomain).localeCompare(normalizeDomain(b.registrableDomain));
     });
 }

@@ -153,6 +153,14 @@ export function createApp(options = {}) {
     res.setHeader("Referrer-Policy", "no-referrer");
     if (req.path.startsWith("/api")) {
       res.setHeader("Cache-Control", "no-store");
+    } else if (/\.(js|css|html)$/.test(req.path) || req.path === "/") {
+      // The app is unbundled, unhashed source: /app.js is /app.js forever, so a browser holding
+      // yesterday's copy has no way to learn otherwise. That is not theoretical — it is why a
+      // deploy landed with the Gemini wiring live and the page still not calling it.
+      //
+      // must-revalidate, not no-store: the 304 round trip is cheap and keeps the cache useful.
+      // What it removes is a browser deciding on its own that it need not ask.
+      res.setHeader("Cache-Control", "no-cache, must-revalidate");
     }
     next();
   });

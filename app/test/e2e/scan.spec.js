@@ -590,7 +590,13 @@ test.describe("the scan a user actually sees", () => {
         .evaluateAll((cells) => cells.map((c) => c.innerText.trim()));
     const before = await order();
     expect(before.length).toBe(3);
-    expect(before).toEqual([...before].sort()); // alphabetical, not by a rank that moves
+
+    // The claim is stability, not a particular sequence: leave the tab, come back, and the rows are
+    // where they were. Re-rendering is what moved them — every render re-read a rank the other tab
+    // owns — so a re-render is what has to prove they stay.
+    await page.click("#tabAll");
+    await page.click("#tabUnused");
+    expect(await order()).toEqual(before);
 
     // Marking one done sinks it and leaves the rest alone.
     page.once("dialog", (d) => d.accept());

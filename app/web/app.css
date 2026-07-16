@@ -730,7 +730,10 @@ th,
 td {
   text-align: left;
   padding: var(--s3) var(--s3);
-  vertical-align: middle;
+  /* top, not middle. 비고 runs to three lines while 도메인 and 건수 are one, and centring pushed every
+     short cell to the middle of the tallest one — so nothing in a row shared a baseline and the eye
+     had no line to read along. Top-aligned, every cell in a row starts where the row starts. */
+  vertical-align: top;
 }
 
 td {
@@ -765,13 +768,23 @@ td:first-child,
 th:first-child {
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
-  width: 1%;
   white-space: nowrap;
 }
 
-.col-count {
+/* Numbers right, and the header with them. A right-aligned column under a left-aligned label reads
+   as two columns; and the digits line up only if the head does too. */
+.col-count,
+th.col-count {
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+/* The controls sit on the row's first line, next to the name they act on — not floated to the
+   middle of whatever height 비고 happened to need. */
+.cell-choice,
+.cell-done,
+.cell-action {
+  vertical-align: top;
 }
 
 .cell-service a,
