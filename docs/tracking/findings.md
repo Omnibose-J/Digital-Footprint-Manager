@@ -33,21 +33,6 @@ that path, `/api/classify-senders` is a live Gemini proxy that checks same-origi
 else** — no session check, unlike `/api/me` — accepting 500 senders per POST from any logged-out
 visitor to the page.
 
-## .env.example was deleted, and README still tells you to copy it (2026-07-16)
-
-The UI merge dropped `app/.env.example` and moved local config to `src/lib/config.ts`, a Next.js
-layout this repo does not have (see the entry above). `loadGaMeasurementId()` falls back to
-`process.env.GA_MEASUREMENT_ID`, so analytics survives on the existing `.env`; `GOOGLE_CLIENT_ID`
-has no such fallback — `server.js` reads it from `process.env` only, and without it `/api/config`
-returns 500 and the sign-in button cannot render.
-
-So README §9's `cp .env.example .env` now fails, and the file it names is the only record of which
-keys the app needs. **Blast radius:** invisible to anyone with a working `.env` — which is everyone
-who has already run this — and a hard stop for the next person who clones it, with no error message
-that names the missing file. Restoring `.env.example` is one file; it is left for the owner because
-the same merge is where `src/lib/config.ts` came from, and if that path is the intended direction
-then `.env.example` should be replaced rather than resurrected.
-
 ## gmail.readonly is broader than what the code currently does (2026-07-16, needs a decision)
 
 A security audit called this High and it is half right. We request `gmail.readonly`, whose consent
