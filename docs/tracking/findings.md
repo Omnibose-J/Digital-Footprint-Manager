@@ -139,6 +139,25 @@ carve-out. The phrases are tagged in `filter.rules.js` so the change has somewhe
 **Blast radius:** a dormant Korean account whose only surviving evidence is its 휴면 notice scores
 15 and sorts to the bottom, when it is exactly the account this product exists to surface.
 
+## Every deployed file is also a public URL (2026-07-16, mitigated except server/)
+
+Vercel serves an uploaded file directly whenever one matches the request path; the `/(.*)` → `/api`
+rewrite in `vercel.json` fires only on a filesystem miss. `/core/*.js` and `/data/catalog.json` are
+served this way on purpose — the browser needs them, and `server.js`'s own `express.static` mounts
+are what answer on localhost. But `/run.mjs` and `/test/*.test.js` were published too, for nothing.
+`.vercelignore` now keeps them out of the bundle.
+
+`server/server.js` cannot go in `.vercelignore`: `api/index.js` imports it, so dropping it from the
+upload breaks the function. It stays readable at `/server/server.js`.
+
+**Blast radius:** none today, and that is the whole point of writing it down. The repo is public,
+so those exact bytes are already on GitHub, and `.env` carries no secret — the client ID and GA id
+are public by design and the OAuth flow uses no client secret. Every reason this is harmless is a
+fact about today, not about the code. Make the repo private and the server source is still
+published, through Vercel alone, with nothing in the source saying so. The fix at that point is to
+move the server under `api/_server.js`: Vercel does not serve `api/` as static (`/api/index.js`
+returns 404 today, unlike every other path), and `_`-prefixed files there do not become functions.
+
 ## CATEGORY_PURCHASES is probably dead code (2026-07-15)
 
 `filter.js` `classifyByCategory` reads `CATEGORY_PURCHASES` from `labelIds`. Gmail's system labels
