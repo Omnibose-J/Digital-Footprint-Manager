@@ -536,10 +536,16 @@ table {
 .w-domain {
   width: 14%;
 }
-/* Inherits what 정리 우선도 (18%) and 신뢰 (18%) used to split between them. It carries prose now,
-   not two pills, so it needs the whole width rather than half of it twice. */
+/* auto, not a percentage, and it is the only auto column on purpose.
+
+   The others declare 22% + 14% and 44+96+68+150px. At 800px those pixels are already 45% of the
+   table, so any percentage here pushed the total past 100% and table-layout:fixed resolved it by
+   squeezing every proportional column — this one hardest, because it holds the longest text. That
+   is what broke: "민감한 정보" wrapping one syllable per line.
+
+   auto means "whatever the declared columns leave", which is the actual intent and cannot overflow. */
 .w-remark {
-  width: 36%;
+  width: auto;
 }
 .w-month {
   width: 96px;

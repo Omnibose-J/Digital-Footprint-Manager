@@ -18,8 +18,18 @@ function readConfigExport(name) {
   }
 }
 
+/**
+ * .env is the answer here, config.ts the legacy one.
+ *
+ * `src/lib/config.ts` resolves ABOVE this repo's root and has never existed in it — it is a Next.js
+ * layout that arrived with a merge. Until now that meant the key could not be set at all: the route
+ * answered 503 no matter what anyone put in .env, which read as "Gemini is broken" rather than
+ * "we are looking in a folder that isn't there".
+ *
+ * config.ts still wins when present, same as GA below, so nobody's working setup breaks.
+ */
 export function loadGeminiApiKey() {
-  return readConfigExport("GEMINI_API_KEY");
+  return readConfigExport("GEMINI_API_KEY") || process.env.GEMINI_API_KEY || "";
 }
 
 /** Empty or placeholder → analytics off. */
