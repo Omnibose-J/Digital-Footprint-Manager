@@ -14,8 +14,10 @@ import { createAggregator } from "../core/filter.js";
 /**
  * Stub Gmail so collectSenders can be driven end to end. `perMessage` decides what each
  * messages.get answers, which is where the retry and abort branches actually live.
+ * `perProfile`/`perList` do the same for the two requests the whole scan hangs on; returning
+ * null falls through to the normal answer.
  */
-function stubGmail({ messageIds = ["m1"], perMessage }) {
+function stubGmail({ messageIds = ["m1"], perMessage, perProfile, perList }) {
   const calls = { profile: 0, list: 0, get: 0 };
   const prev = globalThis.fetch;
   globalThis.fetch = async (url) => {
@@ -23,17 +25,29 @@ function stubGmail({ messageIds = ["m1"], perMessage }) {
     const ok = (body) => new Response(JSON.stringify(body), { status: 200 });
     if (u.includes("/profile")) {
       calls.profile += 1;
-      return ok({ emailAddress: "me@gmail.com", messagesTotal: messageIds.length });
+      return (
+        perProfile?.(calls.profile) ??
+        ok({ emailAddress: "me@gmail.com", messagesTotal: messageIds.length })
+      );
     }
     if (u.includes("/messages?") || /\/messages\?/.test(u) || u.endsWith("/messages")) {
       calls.list += 1;
-      return ok({ messages: messageIds.map((id) => ({ id })) });
+      return perList?.(calls.list) ?? ok({ messages: messageIds.map((id) => ({ id })) });
     }
     calls.get += 1;
     return perMessage(calls.get);
   };
   return { calls, restore: () => (globalThis.fetch = prev) };
 }
+
+const unavailable = () =>
+  new Response(JSON.stringify({ error: { code: 503, message: "Backend Error" } }), { status: 503 });
+
+const oneMessage = () =>
+  new Response(
+    JSON.stringify({ internalDate: "1700000000000", labelIds: [], payload: { headers: [] } }),
+    { status: 200 }
+  );
 
 const errBody = (reason) =>
   new Response(JSON.stringify({ error: { errors: [{ reason }] } }), { status: 403 });
@@ -208,5 +222,68 @@ describe("scanFraction drives the progress bar", () => {
 
   it("clamps: estimatedTotal is an estimate and fetched can overshoot it", () => {
     assert.equal(scanFraction({ target: 100, fetched: 140 }), 1);
+  });
+});
+
+describe("5xx backoff (PRODUCT_SPEC §3: exponential backoff on 429/5xx)", () => {
+  it("a 5xx is Gmail failing transiently, so it is retried", () => {
+    for (const status of [500, 502, 503, 504]) {
+      assert.equal(shouldRetryGmail({ status }, 1), true, `${status} must be retried`);
+    }
+  });
+
+  it("a 5xx still stops at the attempt cap", () => {
+    assert.equal(shouldRetryGmail({ status: 503 }, 4), false);
+  });
+
+  it("a transient 503 costs a retry, not the message", async () => {
+    // A dropped message is not a neutral loss: it ages lastSeenMonth, which is what makes an
+    // active account read as dormant — the failure §3 calls the worst one.
+    const s = stubGmail({ messageIds: ["m1"], perMessage: (n) => (n === 1 ? unavailable() : oneMessage()) });
+    try {
+      const r = await collectSenders("tok", { concurrency: 1 });
+      assert.equal(r.fetched, 1);
+      assert.equal(r.errors, 0);
+      assert.equal(s.calls.get, 2);
+    } finally {
+      s.restore();
+    }
+  });
+
+  it("a transient 503 on the profile does not kill the scan before it starts", async () => {
+    const s = stubGmail({
+      messageIds: ["m1"],
+      perProfile: (n) => (n === 1 ? unavailable() : null),
+      perMessage: () => oneMessage(),
+    });
+    try {
+      const r = await collectSenders("tok", { concurrency: 1 });
+      assert.equal(r.account, "me@gmail.com");
+      assert.equal(r.fetched, 1);
+      assert.equal(s.calls.profile, 2);
+    } finally {
+      s.restore();
+    }
+  });
+
+  it("a transient 503 on the listing does not truncate the result set", async () => {
+    // The worst of the three: the scan aborts mid-way but the rows already rendered stay on
+    // screen, so a partial list reads as a complete one.
+    const s = stubGmail({
+      messageIds: ["m1"],
+      perList: (n) => (n === 1 ? unavailable() : null),
+      perMessage: () => oneMessage(),
+    });
+    try {
+      const r = await collectSenders("tok", { concurrency: 1 });
+      assert.equal(r.fetched, 1);
+      assert.equal(s.calls.list, 2);
+    } finally {
+      s.restore();
+    }
+  });
+
+  it("a permanent error is still permanent: 403 insufficientPermissions never retries", () => {
+    assert.equal(shouldRetryGmail({ status: 403, reason: "insufficientPermissions" }, 1), false);
   });
 });

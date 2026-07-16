@@ -121,7 +121,35 @@ export function shouldRetryGmail(err, attempt) {
   if (attempt >= 4) return false;
   if (err?.status === 429) return true;
   if (err?.status === 403 && isRateLimitReason(err.reason)) return true;
+  // §3 backs off on 5xx as well as 429. At 1,200 metadata fetches paced to the quota ceiling,
+  // drawing a transient Gmail failure is expected rather than exceptional, and dropping the
+  // message is not a neutral loss: it ages lastSeenMonth, which reads an active account as
+  // dormant — the one outcome §3 names worst.
+  if (err?.status >= 500 && err?.status <= 599) return true;
   return false;
+}
+
+/** §3 says exponential: 300ms doubling, so 300 / 600 / 1200 across the three retries the cap allows. */
+function retryDelayMs(attempt) {
+  return 300 * 2 ** (attempt - 1);
+}
+
+/**
+ * The whole scan hangs on profile and listing, and neither had any retry: one transient 5xx there
+ * ended it. The listing case is the worst, because rows already rendered stay on screen with
+ * nothing marking the list partial.
+ */
+async function gmailFetchRetrying(accessToken, path, params) {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await gmailFetch(accessToken, path, params);
+    } catch (err) {
+      attempt += 1;
+      if (!shouldRetryGmail(err, attempt)) throw err;
+      await sleep(retryDelayMs(attempt));
+    }
+  }
 }
 
 /**
@@ -144,7 +172,7 @@ export async function collectSenders(
   let pageToken;
   let lastReportAt = 0;
 
-  const profile = await gmailFetch(accessToken, "users/me/profile");
+  const profile = await gmailFetchRetrying(accessToken, "users/me/profile");
   const estimatedTotal = Number(profile.messagesTotal || 0);
 
   // Before the message loop, not from a progress tick: self-exclusion needs this address, and a
@@ -174,7 +202,7 @@ export async function collectSenders(
     const pageSize = Math.min(500, unlimited ? 500 : cap - listed);
     if (pageSize <= 0) break;
 
-    const listRes = await gmailFetch(accessToken, "users/me/messages", {
+    const listRes = await gmailFetchRetrying(accessToken, "users/me/messages", {
       maxResults: pageSize,
       pageToken,
       fields: "messages/id,nextPageToken",
@@ -227,7 +255,7 @@ export async function collectSenders(
           }
           attempt += 1;
           if (shouldRetryGmail(err, attempt)) {
-            await sleep(300 * attempt);
+            await sleep(retryDelayMs(attempt));
             continue;
           }
           errors += 1;
