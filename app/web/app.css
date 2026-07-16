@@ -882,6 +882,12 @@ tr.row-closed td {
   color: var(--ink-quiet);
 }
 
+/* Inferred, not computed. Quieter than .why-cleanup on purpose: "28개월 방치" is arithmetic on their
+   own mail and "가입 서비스로 보임" is a guess, and the row should not present them as equals. */
+.why-inferred {
+  font-style: italic;
+}
+
 /* The name leads; the domain is a machine detail that identifies it. Stacking them lets the
    service column carry both without a second column competing for the eye. */
 .cell-service {

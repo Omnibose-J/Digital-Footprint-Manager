@@ -108,11 +108,52 @@ let cleanupChoices = {};
  * The timestamps come from the server; nothing here ever sends one.
  */
 let cleanupStatus = {};
+/**
+ * @type {Record<string, { category: string, realService: string, reason: string }>} keyed by
+ * ServiceCandidate.key
+ *
+ * §8 (2026-07-16): Gemini names a sender, and that is all. The rules read a domain and call it the
+ * service, which is wrong whenever a company sends through someone else's estate — Cursor's mail
+ * arrives from stripe.com, so the list showed a payment processor and hid the real account. That is
+ * knowledge about the world, not a pattern in the header, so no rule fixes it.
+ *
+ * It never touches a score. discoveryScore, the bands, the cleanup rank and every §4 gate are
+ * computed before this arrives and are not recomputed after: an empty object here is exactly the
+ * rules-only product, which is what a missing key or a Gemini outage leaves behind.
+ */
+let geminiByKey = {};
 /** @type {"all"|"unused"} */
 let activeTab = "all";
 
 /** Reverse of CHOICE_TO_SPEC: the API speaks §3, the row speaks keep/delete. */
 const SPEC_TO_CHOICE = { in_use: "keep", unused: "delete" };
+
+/**
+ * Ask Gemini who these senders actually are. Display name and address only — §3's amended boundary.
+ *
+ * Fails soft, and that is a design rule rather than laziness (§8): the scan is already complete and
+ * correct when this runs, so a failure costs better names, not results. Anything louder would be
+ * telling the user something broke when nothing they asked for did.
+ */
+async function classifySenders(services) {
+  const senders = (services || [])
+    .filter((s) => s.primaryEmail)
+    .map((s) => ({ key: s.key, displayName: s.displayName || "", email: s.primaryEmail }));
+  if (!senders.length) return {};
+  try {
+    const res = await fetch("/api/classify-senders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ senders }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data?.results || {};
+  } catch (e) {
+    console.warn("[gemini] classify failed; rules-only names stand", e);
+    return {};
+  }
+}
 
 /**
  * Load this user's labels and their completion status in one call.
@@ -364,7 +405,11 @@ function setActiveTab(tab) {
 // Service name opens the sender's site (https://{domain}). Personal free-mailbox domains stay
 // plain text — https://gmail.com is not a product homepage worth sending anyone to.
 function serviceCell(s) {
-  const name = escapeHtml(s.displayName || s.registrableDomain || "");
+  // Gemini's name wins over the one we derived from the domain — that is the whole reason it is here
+  // (§8). stripe.com is Cursor's mail estate, not Cursor's brand, and only the name changes: the row
+  // is still keyed, scored and grouped by the domain underneath it, which is printed right below.
+  const inferred = geminiByKey[s.key]?.realService;
+  const name = escapeHtml(inferred || s.displayName || s.registrableDomain || "");
   const domain = String(s.registrableDomain || "")
     .toLowerCase()
     .replace(/\.$/, "");
@@ -420,6 +465,13 @@ function remarkCell(s) {
   // Absent for anything §4 refuses to rank: closed, not high-band, or no actionable link.
   if (s.cleanupWhy) {
     out.push(`<span class="why why-cleanup">${escapeHtml(s.cleanupWhy)}</span>`);
+  }
+  // Gemini's sentence, under ours, and only where ours has nothing to say. §4 ranks high-band rows
+  // only, so most of this column was a dash — the row was on screen with no reason to be. This is
+  // what fills that, and it stays second because a computed axis outranks an inferred sentence.
+  const g = geminiByKey[s.key];
+  if (g?.reason) {
+    out.push(`<span class="why why-inferred">${escapeHtml(g.reason)}</span>`);
   }
   if (!out.length) return `<span class="cell-none">—</span>`;
   return out.join("");
@@ -702,6 +754,7 @@ async function refreshMe() {
     // the scan already follows for its table.
     cleanupChoices = {};
     cleanupStatus = {};
+    geminiByKey = {};
   }
   if (lastSnapshot) renderSnapshot(lastSnapshot);
   return data;
@@ -908,6 +961,9 @@ scanBtn?.addEventListener("click", async () => {
   hiddenRows.innerHTML = "";
   lastSnapshot = null;
   userVerdict.clear();
+  // Names inferred from the last mailbox describe the last mailbox. Keeping them across a scan would
+  // print a brand for a sender this scan may never even see.
+  geminiByKey = {};
   if (choiceSummary) choiceSummary.classList.add("hidden");
   scanBtn.disabled = true;
   linkNote.classList.add("hidden");
@@ -962,6 +1018,15 @@ scanBtn?.addEventListener("click", async () => {
 
     const finalSnap = aggregator.snapshot();
     renderSnapshot(finalSnap);
+
+    // After the scan renders, never before it: the list is already complete and correct here, so
+    // this is a second pass that improves names and fills the 비고 column. Awaiting it earlier would
+    // make a Gemini round trip part of "did my scan work", which it is not.
+    classifySenders(finalSnap.services).then((results) => {
+      if (myScan !== scanGeneration) return; // a newer scan (or a logout) owns the screen now
+      geminiByKey = results;
+      if (lastSnapshot) renderSnapshot(lastSnapshot);
+    });
 
     const bands = { high: 0, review: 0, low: 0 };
     for (const s of finalSnap.services) {

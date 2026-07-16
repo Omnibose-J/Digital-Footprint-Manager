@@ -39,7 +39,10 @@ export function authenticated(domain) {
  * @param {import('@playwright/test').Page} page
  * @param {{ account?: string, messages?: any[], failWith?: {status: number, reason?: string} }} opts
  */
-export async function installFakeGoogle(page, { account = "tester@gmail.com", messages = [], failWith } = {}) {
+export async function installFakeGoogle(
+  page,
+  { account = "tester@gmail.com", messages = [], failWith, classify = {} } = {}
+) {
   // GIS never loads under CSP in a test, and app.js polls window.google until it does. Inject the
   // surface it actually calls: initialize/renderButton for the sign-in UI, initTokenClient for the
   // Gmail token. requestAccessToken resolves immediately, which is the consented path.
@@ -145,9 +148,11 @@ export async function installFakeGoogle(page, { account = "tester@gmail.com", me
     });
   });
 
-  // E2E must not call the real Gemini API. Empty results = safe rule-only fallback.
+  // E2E must not call the real Gemini API. Default is empty results = the rules-only fallback, which
+  // is what a missing key or an outage leaves behind and therefore what most tests should see.
+  // Pass `classify` to hand back a canned answer keyed by ServiceCandidate.key.
   await page.route("**/api/classify-senders", (route) =>
-    route.fulfill({ json: { results: {} } })
+    route.fulfill({ json: { results: classify } })
   );
 
   await page.route("**gmail.googleapis.com/**", (route) => {
