@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>디지털 발자국 정리: 내 계정 찾기</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="./app.css" />
+    <!-- ?v= is a cache buster, bumped by hand on deploy. Nothing here is bundled or content-hashed, so
+       /app.js is /app.js forever and a browser that cached it before Cache-Control existed has no
+       reason to ask again. It cost a deploy where the Gemini wiring was live and the page never
+       called it. A query string makes it a different URL, which is the one thing a stale cache
+       cannot argue with. -->
+  <link rel="stylesheet" href="./app.css?v=20260716c" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
@@ -190,6 +195,6 @@
       </div>
     </div>
 
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./app.js?v=20260716c"></script>
   </body>
 </html>

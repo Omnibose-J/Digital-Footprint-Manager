@@ -149,23 +149,32 @@ async function classifySenders(services) {
       email: s.primaryEmail,
     }));
   if (!senders.length) {
-    // Silence here is indistinguishable from "Gemini said nothing", and the two need different
-    // fixes: this one means no candidate carried a From address, so the request never happened.
-    console.warn("[gemini] no senders to classify:", (services || []).length, "candidates, none with primaryEmail");
+    // On screen, not in the console. Every failure here was invisible from outside the browser —
+    // the route logs nothing because the request never happens, and a quiet {} looks exactly like
+    // "Gemini had nothing to say". These three outcomes need three different fixes, so they say
+    // which one they are. TEMPORARY: revert to silent fail-soft once the path is proven.
+    err.textContent = `[진단] 분류 요청 안 함: 후보 ${(services || []).length}개 중 발신주소 있는 것 0개`;
     return {};
   }
-  console.info("[gemini] classifying", senders.length, "senders");
   try {
     const res = await fetch("/api/classify-senders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ senders }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      err.textContent = `[진단] 분류 요청 실패: HTTP ${res.status} ${body.slice(0, 120)}`;
+      return {};
+    }
     const data = await res.json();
+    const n = Object.keys(data?.results || {}).length;
+    if (!n) {
+      err.textContent = `[진단] 분류기가 빈 응답: ${senders.length}건 보냄, 0건 받음 (서버가 Gemini에 닿지 못함)`;
+    }
     return data?.results || {};
   } catch (e) {
-    console.warn("[gemini] classify failed; rules-only names stand", e);
+    err.textContent = `[진단] 분류 요청 예외: ${String(e?.message || e).slice(0, 120)}`;
     return {};
   }
 }
