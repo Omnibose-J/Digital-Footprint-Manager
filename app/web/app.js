@@ -148,7 +148,13 @@ async function classifySenders(services) {
       subjects: s.subjects || [],
       email: s.primaryEmail,
     }));
-  if (!senders.length) return {};
+  if (!senders.length) {
+    // Silence here is indistinguishable from "Gemini said nothing", and the two need different
+    // fixes: this one means no candidate carried a From address, so the request never happened.
+    console.warn("[gemini] no senders to classify:", (services || []).length, "candidates, none with primaryEmail");
+    return {};
+  }
+  console.info("[gemini] classifying", senders.length, "senders");
   try {
     const res = await fetch("/api/classify-senders", {
       method: "POST",
