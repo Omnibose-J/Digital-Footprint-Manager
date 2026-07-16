@@ -74,6 +74,12 @@ let abortScan = null;
  * walked away from would otherwise repaint the table for whoever signed in next.
  */
 let scanGeneration = 0;
+/**
+ * Which session the in-memory user data belongs to — the same device as scanGeneration, for the
+ * same reason: signing in and out are DOM swaps rather than navigations, so nothing gets thrown
+ * away for us and a reply from the last session lands on this one's screen.
+ */
+let sessionGeneration = 0;
 let gmailAccessToken = null;
 let hiddenOpen = false;
 /** @type {any | null} */
@@ -148,12 +154,16 @@ async function classifySenders(services) {
       subjects: s.subjects || [],
       email: s.primaryEmail,
     }));
+  // Console, not `err`. These lines were on screen for a while, and they were wrong to be there:
+  // `err` is where we tell the user something they asked for failed, and nobody asked for better
+  // names — the scan is complete and correct before this runs. Two e2e tests said so by asserting
+  // `err` stays empty when the classifier gives nothing back, and they were right.
+  //
+  // They still say which of the four outcomes happened, because the failure this actually had was
+  // invisible: a retired model 404'd every batch, the route failed soft exactly as designed, and an
+  // empty 비고 looked identical to "Gemini had nothing to say".
   if (!senders.length) {
-    // On screen, not in the console. Every failure here was invisible from outside the browser —
-    // the route logs nothing because the request never happens, and a quiet {} looks exactly like
-    // "Gemini had nothing to say". These three outcomes need three different fixes, so they say
-    // which one they are. TEMPORARY: revert to silent fail-soft once the path is proven.
-    err.textContent = `[진단] 분류 요청 안 함: 후보 ${(services || []).length}개 중 발신주소 있는 것 0개`;
+    console.warn(`[gemini] not sent: 0 of ${(services || []).length} candidates have an address`);
     return {};
   }
   try {
@@ -164,17 +174,18 @@ async function classifySenders(services) {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      err.textContent = `[진단] 분류 요청 실패: HTTP ${res.status} ${body.slice(0, 120)}`;
+      console.warn(`[gemini] request failed: HTTP ${res.status} ${body.slice(0, 200)}`);
       return {};
     }
     const data = await res.json();
     const n = Object.keys(data?.results || {}).length;
-    if (!n) {
-      err.textContent = `[진단] 분류기가 빈 응답: ${senders.length}건 보냄, 0건 받음 (서버가 Gemini에 닿지 못함)`;
-    }
+    // Empty is not proof the server never reached Gemini — a non-JSON reply and a batch of senders
+    // it declined to classify land here too. Report the shape, not a guessed cause; the server logs
+    // which one it was.
+    if (!n) console.warn(`[gemini] empty result: sent ${senders.length}, got 0`);
     return data?.results || {};
   } catch (e) {
-    err.textContent = `[진단] 분류 요청 예외: ${String(e?.message || e).slice(0, 120)}`;
+    console.warn("[gemini] request threw", e?.message || e);
     return {};
   }
 }
@@ -690,7 +701,22 @@ function setLoggedInUI(me) {
   sessionEmail = me.email || "";
 }
 
+/**
+ * Everything in memory that belongs to one signed-in user, dropped in one place.
+ *
+ * It used to live in `refreshMe`'s logged-out branch, which the logout button does not go through —
+ * it calls `setLoggedOutUI` directly. So the labels were never actually dropped on the way out; the
+ * screen was cleared and the answers stayed in memory for whoever signed in next.
+ */
+function clearSessionState() {
+  cleanupChoices = {};
+  cleanupStatus = {};
+  // Names inferred from a mailbox describe that mailbox, and it was not this user's.
+  geminiByKey = {};
+}
+
 function setLoggedOutUI() {
+  clearSessionState();
   appPanel.classList.add("hidden");
   loginPanel.classList.remove("hidden");
   statusEl.textContent = "";
@@ -779,19 +805,22 @@ function closeGuide() {
 async function refreshMe() {
   const res = await fetch("/api/me");
   const data = await res.json();
+  // Whoever this is, they are not the last person — so clear before the new session's UI goes up,
+  // rather than after their labels arrive. The old order showed the signed-in screen and then went
+  // to fetch the labels, leaving the previous user's answers in memory, and rendering, for as long
+  // as /api/choices took to answer.
+  const mySession = ++sessionGeneration;
+  clearSessionState();
   if (data.loggedIn) {
     setLoggedInUI(data);
     const loaded = await fetchChoices();
+    // The same guard the scan uses, for the same reason: two refreshMe calls can be in flight (page
+    // load and a login), and the slower one must not land its labels on the session that replaced it.
+    if (mySession !== sessionGeneration) return data;
     cleanupChoices = loaded.choices;
     cleanupStatus = loaded.status;
   } else {
     setLoggedOutUI();
-    // Signing out drops the labels from memory, not just from the screen. They belong to a session,
-    // and the next person at this browser must not inherit the last one's answers — the same rule
-    // the scan already follows for its table.
-    cleanupChoices = {};
-    cleanupStatus = {};
-    geminiByKey = {};
   }
   if (lastSnapshot) renderSnapshot(lastSnapshot);
   return data;
@@ -1153,6 +1182,9 @@ logoutBtn?.addEventListener("click", async () => {
   // Disown the scan here, before the awaits below: the logout round-trip and the token revoke
   // both take longer than an in-flight Gmail read needs to come back and repaint the table.
   scanGeneration += 1;
+  // And disown the session, for the same reason one layer up: a /api/choices request sent moments
+  // ago is still coming, and it must not restore this user's labels onto a signed-out page.
+  sessionGeneration += 1;
   if (abortScan) abortScan.abort();
   if (gmailAccessToken && window.google?.accounts?.oauth2) {
     try {

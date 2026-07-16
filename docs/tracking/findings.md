@@ -4,25 +4,50 @@ Problems found while doing other work, verified, and deliberately not fixed ther
 says why it could not be solved at the time and what it costs to leave. Delete an entry when it
 is fixed, not when it is noticed.
 
-## /api/classify-senders has no session check (2026-07-16, live now)
+## One sender address can be several services, and we merge them (2026-07-16)
 
-The spec question this entry opened is **settled** — §5 was amended and §8 records why, so the route
-crossing sender addresses to Gemini is now the decided design, not a violation. What did not get
-decided is who may call it.
+`aggregationKey` (`core/filter.js`) buckets by registrable domain, so `receipts@stripe.com` is one
+row — but Stripe sends for Cursor and for Notion, and both land in it. Their evidence and their
+message counts merge, and the row is named after whichever won. A review called this a
+domain-merging bug; that framing is half right and the fix it implies does not work.
 
-`/api/classify-senders` checks same-origin and **nothing else**. Every other route that touches user
-data resolves a session first; this one accepts 500 senders per POST from any visitor to the page,
-signed in or not. Same-origin stops another site from calling it in a browser; it stops nothing else,
-and it is the only thing standing between an anonymous request and our Gemini quota.
+**Keying by address instead does not help.** Both mails come from the *same address*. The merge is
+not a property of the domain granularity — it is that we key on sender identity at all, and one
+sender legitimately serves many services. `stripe.com` is not in `RELAY_DOMAINS`, and putting it
+there buys `addr:receipts@stripe.com`, which is still one bucket.
 
-It was harmless while `loadGeminiApiKey()` read a path that does not exist and the route 503'd on
-every call. **That is no longer true: the key now resolves from `.env` and the route is live.**
+The only evidence that separates them is the display name: "Cursor via Stripe" vs "Notion via
+Stripe". That is why `topNames()` exists and why every name a domain sent under is in the Gemini
+payload, with the prompt told to read "X via Y" as X and to say so in 비고 when the names show
+several services behind one relay. **So this is mitigated at the naming layer and unfixed at the
+aggregation layer**, deliberately: splitting the bucket means keying on `(address, displayName)`,
+which re-splits every ordinary sender that ever changed its From name ("Google" → "Google 계정") and
+would fragment the list far more often than it would correctly separate a relay.
 
-**Blast radius:** a Gemini proxy anyone can drive from a page they did not sign into. The cost is
-quota and money rather than user data — the caller supplies the addresses, so nobody can read a
-mailbox through it — which is why this is an entry and not a stop-work. **The fix is one line**
-(`const session = await getSession(req); if (!session) return 401`), and the reason it is not written
-yet is that it wants the same test the other routes have, not a guess.
+**Blast radius:** for shared payment processors and relays, one row where there should be several —
+merged 건수, merged 마지막 흔적, and a 탈퇴 recommendation aimed at the wrong service. Bounded by how
+much mail arrives through relays we have not catalogued. **To settle:** count how many real senders
+have >1 distinct display name AND look like a relay, before deciding the split is worth its false
+positives. `senderNames` is already on the candidate, so the measurement is a scan and a filter.
+
+## Subjects reach the model, so a subject can address the model (2026-07-16)
+
+`/api/classify-senders` puts up to four subject lines per sender into the Gemini prompt as JSON
+(`server/gemini-classify.js`). Subject lines are attacker-controlled: anyone who can mail the user
+can write one. A crafted subject can carry instructions, and the model may follow them — changing
+the `realService` name or 비고 of *any* row in the same batch, not only the sender that sent it.
+
+Bounded, which is why it is an entry rather than a stop: the model's output touches names and prose
+only. Scores, bands and 정리 우선도 are computed by `verdict.js` from the rule-based evidence and are
+never shown the model's answer, so this cannot manipulate a ranking. The rendering path escapes HTML,
+so it is not an XSS vector either. The realistic damage is a wrong or abusive service name in a
+table cell.
+
+**Not fixed here** because the honest fix is a structural one — subjects delivered as data the model
+is told to treat as untrusted, plus an output check that a returned `realService` is plausible for
+its sender — and both want a test with a real adversarial subject in it, which is more than this
+session had left. **The cheap partial** (already in place) is the 120-char subject cap and the
+300-char `reason` cap, which limit what a payload can carry and what it can produce.
 
 ## gmail.readonly is broader than what the code currently does (2026-07-16, needs a decision)
 
@@ -185,8 +210,13 @@ a confusing dead button, not a leak, and a page refresh clears it.
 Vercel serves an uploaded file directly whenever one matches the request path; the `/(.*)` → `/api`
 rewrite in `vercel.json` fires only on a filesystem miss. `/core/*.js` and `/data/catalog.json` are
 served this way on purpose — the browser needs them, and `server.js`'s own `express.static` mounts
-are what answer on localhost. But `/run.mjs` and `/test/*.test.js` were published too, for nothing.
-`.vercelignore` now keeps them out of the bundle.
+are what answer on localhost. But `/run.mjs` and `/test/*.test.js` were published too, for nothing,
+and so was `/supabase/.temp/linked-project.json`, the Supabase CLI's scratch file, with our project
+ref in it. `.vercelignore` now keeps them out of the bundle.
+
+The scratch file is the reason to re-read this entry rather than trust it: it appeared because
+someone ran `supabase link`, not because anyone changed the deployment. Any tool that writes into
+`app/` publishes whatever it writes, silently, and the default is publish.
 
 `server/server.js` cannot go in `.vercelignore`: `api/index.js` imports it, so dropping it from the
 upload breaks the function. It stays readable at `/server/server.js`.

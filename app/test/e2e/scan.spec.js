@@ -656,8 +656,19 @@ test.describe("the page a logged-out visitor lands on", () => {
 
     await expect(page.locator("#loginPanel")).toBeVisible();
     await expect(page.locator("#appPanel")).toBeHidden();
-    await expect(page.locator(".trust")).toContainText("메일 본문은 읽지 않습니다");
-    await expect(page.locator(".trust")).toContainText("메일이 서버로 가지 않습니다");
+    await expect(page.locator(".trust")).toContainText("메일 본문과 첨부는 읽지 않습니다");
+
+    // This block used to promise "메일이 서버로 가지 않습니다", and §3 was amended out from under it
+    // (§8, 2026-07-16): sender names, the address and a subject sample now go to our server and on to
+    // Gemini. The sentence stayed on screen after it stopped being true, which is the one failure
+    // this page cannot have — the whole product is an argument for trusting it with a mailbox.
+    //
+    // So the assertion is the disclosure, not the wording: name the third party and name what is
+    // still guaranteed. A future copy edit that quietly drops "Gemini" fails here, which is the
+    // point — it is the fact with the strongest incentive to disappear.
+    await expect(page.locator(".trust")).toContainText("Gemini");
+    await expect(page.locator(".trust")).toContainText("제목");
+    await expect(page.locator(".trust")).toContainText("본문은 브라우저 밖으로 나가지 않습니다");
 
     // Above the button, not below it. This is the whole trust argument.
     const trustBottom = await page.locator(".trust").evaluate((el) => el.getBoundingClientRect().bottom);

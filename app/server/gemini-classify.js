@@ -141,6 +141,11 @@ ${JSON.stringify(payload)}`;
           responseMimeType: "application/json",
         },
       }),
+      // A hang here is worse than an error: the catch below already turns any failure into the
+      // rule-based labels the client renders anyway, but without a deadline the request just holds
+      // a serverless invocation open until the platform kills it, and 비고 stays empty either way.
+      // 30s is well clear of the ~10s a 50-sender batch takes.
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!res.ok) {

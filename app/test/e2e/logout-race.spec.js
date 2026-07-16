@@ -97,3 +97,77 @@ test("a scan that lands after logout never reaches the next user in the same tab
   expect(await tableDomains(page), "Bob must not inherit Alice's services").toEqual([]);
   await expect(page.locator("#meta"), "Bob must not see Alice's Gmail address").not.toContainText(ALICE);
 });
+
+/**
+ * The same rule as above, one layer in: the labels, not the table.
+ *
+ * Clearing the table on logout is not clearing the session. `setLoggedOutUI` emptied the screen and
+ * `cleanupChoices` was emptied in `refreshMe`'s logged-out branch — which the logout button never
+ * reaches, because it calls `setLoggedOutUI` directly. So Alice's answers outlived Alice, invisibly,
+ * and the next scan in the tab was where they reappeared.
+ *
+ * Bob's own labels are held on the wire on purpose. That gap — signed in, labels not back yet — is
+ * the entire window, and the old code rendered Alice's into it.
+ */
+test("logging out drops the last user's labels, not just their screen", async ({ page }) => {
+  await installFakeGoogle(page, { account: ALICE, messages: mailbox() });
+  await page.addInitScript(() => {
+    const id = window.google.accounts.id;
+    const initialize = id.initialize;
+    id.initialize = (cfg) => {
+      window.__credentialCallback = cfg.callback;
+      return initialize(cfg);
+    };
+  });
+
+  await page.goto("/");
+  await expect(page.locator("#appPanel")).toBeVisible();
+  await page.click("#scan");
+
+  const coupang = '#rows button[data-choice="delete"][data-domain="coupang.com"]';
+  await page.locator(coupang).waitFor();
+  await page.locator(coupang).click();
+  await expect(page.locator(coupang), "Alice's own label should stick").toHaveClass(/is-on/);
+
+  await page.click("#logout");
+  await expect(page.locator("#loginPanel")).toBeVisible();
+
+  // Bob's labels are parked, not merely slowed. A delay races the scan — and lost: the first
+  // version of this test used 1500ms, Bob's empty labels landed before his rows rendered, and it
+  // passed against the unfixed code. Holding the request and counting it is what makes the window
+  // real, the same reason messages.get is parked above.
+  //
+  // Registered after the harness's route, so it wins: Playwright matches the newest handler first.
+  let bobAsked = 0;
+  let releaseChoices = () => {};
+  const choicesHeld = new Promise((resolve) => {
+    releaseChoices = resolve;
+  });
+  await page.route("**/api/choices", async (route) => {
+    bobAsked += 1;
+    await choicesHeld;
+    await route.fulfill({ json: { choices: {} } });
+  });
+  await page.route("**/api/auth/login", (route) => route.fulfill({ json: { ok: true } }));
+  await page.route("**/api/me", (route) =>
+    route.fulfill({ json: { loggedIn: true, email: BOB, name: "밥" } })
+  );
+  // Not awaited: awaiting the callback would wait out the 1500ms and skip past the only moment
+  // this test is about.
+  await page.evaluate(() => {
+    window.__credentialCallback({ credential: "jwt-for-bob" });
+  });
+  await expect(page.locator("#appPanel")).toBeVisible();
+
+  // Bob is signed in and his own labels are still on the wire. Assert that, rather than assume it.
+  await expect.poll(() => bobAsked, { timeout: 10000 }).toBeGreaterThan(0);
+
+  await page.click("#scan");
+  await page.locator(coupang).waitFor();
+  await expect(
+    page.locator('#rows button[data-choice="delete"].is-on'),
+    "Bob must not inherit Alice's 미사용"
+  ).toHaveCount(0);
+
+  releaseChoices();
+});

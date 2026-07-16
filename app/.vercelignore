@@ -16,6 +16,10 @@ playwright-report
 .env.*
 *.log
 
+# The Supabase CLI's scratch dir. Nothing at runtime reads it, and .temp/linked-project.json was
+# answering 200 in production with our project ref in it.
+supabase
+
 # Local-only: the launcher and the test suite never run on Vercel.
 test
 run.mjs

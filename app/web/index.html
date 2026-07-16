@@ -10,7 +10,7 @@
        reason to ask again. It cost a deploy where the Gemini wiring was live and the page never
        called it. A query string makes it a different URL, which is the one thing a stale cache
        cannot argue with. -->
-  <link rel="stylesheet" href="./app.css?v=20260716c" />
+  <link rel="stylesheet" href="./app.css?v=20260716d" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
@@ -27,8 +27,8 @@
                is about to ask. Comparable products put the same copy behind the request. -->
           <div class="trust">
             <ul>
-              <li><span><strong>메일 본문은 읽지 않습니다.</strong> 발신자와 제목 같은 헤더만 봅니다.</span></li>
-              <li><span><strong>메일이 서버로 가지 않습니다.</strong> 스캔은 브라우저 안에서 끝나고, 우리 서버는 메일을 받지 않습니다.</span></li>
+              <li><span><strong>메일 본문과 첨부는 읽지 않습니다.</strong> 발신자와 제목 같은 헤더만 봅니다.</span></li>
+              <li><span><strong>본문은 브라우저 밖으로 나가지 않습니다.</strong> 스캔은 브라우저 안에서 끝납니다. 다만 발신자가 어떤 서비스인지 알아내기 위해, <strong>발신자 이름·주소와 제목 몇 줄(발신자당 최대 4개)</strong>이 저희 서버를 거쳐 Google Gemini로 갑니다.</span></li>
               <li><span><strong>대신 탈퇴해주지 않습니다.</strong> 탈퇴는 각 서비스의 공식 화면에서 직접 하시고, 저희는 그 경로만 안내합니다.</span></li>
               <li><span>권한은 <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">Google 계정 설정</a>에서 언제든 해제할 수 있습니다.</span></li>
             </ul>
@@ -195,6 +195,6 @@
       </div>
     </div>
 
-    <script type="module" src="./app.js?v=20260716c"></script>
+    <script type="module" src="./app.js?v=20260716d"></script>
   </body>
 </html>
