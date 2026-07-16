@@ -532,47 +532,70 @@ test.describe("the scan a user actually sees", () => {
     await expect(row.locator("a[data-out='cancel']")).toHaveCount(0);
   });
 
-  test("탈퇴 완료 and 구독해지 완료 are recorded separately and survive a reload", async ({ page }) => {
-    // §4 warns on screen that unsubscribing does not close an account. One 완료 flag for both would
-    // contradict that copy in the only place the user records what they actually did — and §8's
-    // storage decision turns on this exact field: a re-scan rebuilds the candidate list but cannot
-    // rebuild which withdrawals someone already filed.
+  test("탈퇴 완료 asks before it commits, and survives a reload", async ({ page }) => {
+    // §4: only the user may mark this done, and we cannot see it happen — the withdrawal takes place
+    // on the service's own site. A checkbox records that the moment a pointer lands on it; the
+    // confirm is the gap between a misclick and a claim. §8's storage decision turns on this exact
+    // field: a re-scan rebuilds the candidate list but cannot rebuild which withdrawals were filed.
     await runScan(page);
     const row = await markUnusedAndOpenTab(page, "spotify.com");
+    const btn = row.locator("[data-withdraw]");
+    await expect(btn).toHaveText("탈퇴 완료");
 
-    const withdrawn = row.locator('input[data-done="withdrawn"]');
-    const unsubscribed = row.locator('input[data-done="unsubscribed"]');
-    await expect(withdrawn).not.toBeChecked();
-    await expect(unsubscribed).not.toBeChecked();
+    // Declining leaves the row exactly as it was.
+    page.once("dialog", (d) => d.dismiss());
+    await btn.click();
+    await expect(btn).toHaveText("탈퇴 완료");
 
-    await withdrawn.check();
-    await expect(withdrawn).toBeChecked();
-    // Ticking 탈퇴 must not tick 구독해지: they are two facts, and neither implies the other.
-    await expect(unsubscribed).not.toBeChecked();
+    page.once("dialog", (d) => d.accept());
+    await btn.click();
+    await expect(row.locator("[data-withdraw]")).toHaveText("탈퇴 완료됨");
     await expect(page.locator("#unusedSummary")).toContainText("탈퇴 완료 1개");
 
-    // Reload proves it reached the server: memory is gone, so a checked box can only come from GET.
+    // Reload proves it reached the server: memory is gone, so this can only come back from GET.
     await page.reload();
     await runScan(page);
     await page.click("#tabUnused");
-    const after = page.locator("#unusedRows tr", { hasText: "spotify.com" });
-    await expect(after.locator('input[data-done="withdrawn"]')).toBeChecked();
-    await expect(after.locator('input[data-done="unsubscribed"]')).not.toBeChecked();
+    await expect(
+      page.locator("#unusedRows tr", { hasText: "spotify.com" }).locator("[data-withdraw]")
+    ).toHaveText("탈퇴 완료됨");
   });
 
-  test("a completion that fails to save unticks itself", async ({ page }) => {
-    // The one place an optimistic tick is unacceptable: the user walks away believing a withdrawal
+  test("a completion that fails to save goes back to unmarked", async ({ page }) => {
+    // The one place an optimistic write is unacceptable: the user walks away believing a withdrawal
     // is on record, and nothing ever tells them it is not.
     await runScan(page);
     const row = await markUnusedAndOpenTab(page, "spotify.com");
     await page.route("**/api/choices/*/status", (route) => route.fulfill({ status: 500, json: {} }));
 
-    // click(), not check(): check() retries until the box stays ticked, so it fights the rollback
-    // this test exists to prove — it would keep re-clicking a failing save until it timed out.
-    await row.locator('input[data-done="withdrawn"]').click();
+    page.once("dialog", (d) => d.accept());
+    await row.locator("[data-withdraw]").click();
 
     await expect(page.locator("#err")).toContainText("저장하지 못했습니다");
-    await expect(row.locator('input[data-done="withdrawn"]')).not.toBeChecked();
+    await expect(row.locator("[data-withdraw]")).toHaveText("탈퇴 완료");
+  });
+
+  test("the 미사용 list keeps its order while the other tab re-ranks", async ({ page }) => {
+    // It used to inherit the 후보 list's cleanup ranking, which moves as the user works — labelling
+    // re-sorts, a classifier answer re-renders, and rows jumped under a cursor aiming at 탈퇴 완료.
+    await runScan(page);
+    await page.locator("#rows tr", { hasText: "spotify.com" }).locator('button[data-choice="delete"]').click();
+    await page.locator("#rows tr", { hasText: "github.com" }).locator('button[data-choice="delete"]').click();
+    await page.locator("#rows tr", { hasText: "vercel.com" }).locator('button[data-choice="delete"]').click();
+    await page.click("#tabUnused");
+
+    const order = () =>
+      page
+        .locator("#unusedRows tr .cell-domain")
+        .evaluateAll((cells) => cells.map((c) => c.innerText.trim()));
+    const before = await order();
+    expect(before.length).toBe(3);
+    expect(before).toEqual([...before].sort()); // alphabetical, not by a rank that moves
+
+    // Marking one done sinks it and leaves the rest alone.
+    page.once("dialog", (d) => d.accept());
+    await page.locator("#unusedRows tr", { hasText: "github.com" }).locator("[data-withdraw]").click();
+    await expect(page.locator("#unusedRows tr").last()).toContainText("github.com");
   });
 
   test("복구 puts an excluded sender back in the list", async ({ page }) => {

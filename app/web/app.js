@@ -144,6 +144,8 @@ async function classifySenders(services) {
       // Not just the name the row prints: stripe.com is "Cursor via Stripe" and "Notion via Stripe"
       // at once, and the winner alone is the one fact that cannot resolve either of them.
       names: s.senderNames || [],
+      // A subject sample, weighted to what the phrase rules could not read (§3, amended 2026-07-16).
+      subjects: s.subjects || [],
       email: s.primaryEmail,
     }));
   if (!senders.length) return {};
@@ -328,8 +330,26 @@ function updateChoiceSummary(services) {
   choiceSummary.classList.remove("hidden");
 }
 
+/**
+ * The 미사용 list, in its own stable order.
+ *
+ * It used to inherit the 후보 list's order, which is sorted by cleanup rank — a rank that moves while
+ * the user works: labelling a row re-sorts, a Gemini answer re-renders, and rows this tab already
+ * showed jumped around under a cursor about to click 탈퇴 완료. Nothing here needs that ranking
+ * anyway; the user already decided about every row on this tab.
+ *
+ * Done sinks, then alphabetical by domain. Both are properties of the row itself, so the same list
+ * renders the same way every time regardless of what just happened on the other tab.
+ */
 function unusedServicesFromSnapshot(snapshot) {
-  return (snapshot?.services || []).filter((s) => getChoice(s.registrableDomain) === "delete");
+  return (snapshot?.services || [])
+    .filter((s) => getChoice(s.registrableDomain) === "delete")
+    .sort((a, b) => {
+      const da = isStatusOn(a.registrableDomain, "withdrawn") ? 1 : 0;
+      const db = isStatusOn(b.registrableDomain, "withdrawn") ? 1 : 0;
+      if (da !== db) return da - db;
+      return normalizeDomain(a.registrableDomain).localeCompare(normalizeDomain(b.registrableDomain));
+    });
 }
 
 /**
@@ -353,27 +373,19 @@ function deletionCell(s) {
 function unusedRowHtml(s, i) {
   const domain = normalizeDomain(s.registrableDomain);
   const d = escapeHtml(domain);
-  // Two checkboxes, not one. §4 warns on screen that unsubscribing does not close an account; a
-  // single 완료 would say the opposite in the only place the user actually records what they did.
+  const done = isStatusOn(domain, "withdrawn");
+  // One button, and it asks before it commits. A checkbox records a fact the moment the pointer
+  // lands on it, and this fact is "나는 이 서비스를 탈퇴했다" — a thing the user does elsewhere, on
+  // the service's own site, and can only misclick here. The confirm is the gap between the two.
+  const doneCell = done
+    ? `<button type="button" class="btn-row is-done" data-withdraw="${d}" data-on="1">탈퇴 완료됨</button>`
+    : `<button type="button" class="btn-row" data-withdraw="${d}" data-on="0">탈퇴 완료</button>`;
   return `<td class="cell-rank">${i + 1}</td>
       <td class="cell-service">${serviceCell(s)}</td>
       <td class="cell-domain">${escapeHtml(domain)}</td>
       <td class="cell-month" data-label="마지막 흔적">${escapeHtml(s.lastSeenMonth || "—")}</td>
       <td class="cell-action">${deletionCell(s)}</td>
-      <td class="cell-done" data-label="완료">
-        <label class="done-check">
-          <input type="checkbox" data-done="withdrawn" data-domain="${d}" ${
-            isStatusOn(domain, "withdrawn") ? "checked" : ""
-          } />
-          <span>탈퇴</span>
-        </label>
-        <label class="done-check">
-          <input type="checkbox" data-done="unsubscribed" data-domain="${d}" ${
-            isStatusOn(domain, "unsubscribed") ? "checked" : ""
-          } />
-          <span>구독해지</span>
-        </label>
-      </td>`;
+      <td class="cell-done" data-label="완료">${doneCell}</td>`;
 }
 
 function renderUnusedList() {
@@ -922,14 +934,23 @@ unusedRows?.addEventListener("click", (ev) => {
   }
 });
 
-unusedRows?.addEventListener("change", (ev) => {
-  const input = ev.target.closest?.("input[data-done]");
-  if (!input) return;
-  const field = input.getAttribute("data-done");
-  const domain = input.getAttribute("data-domain") || "";
-  if (field !== "withdrawn" && field !== "unsubscribed") return;
+unusedRows?.addEventListener("click", (ev) => {
+  const btn = ev.target.closest?.("[data-withdraw]");
+  if (!btn) return;
+  const domain = btn.getAttribute("data-withdraw") || "";
+  const turningOn = btn.getAttribute("data-on") !== "1";
+  const name = lastSnapshot?.services?.find(
+    (s) => normalizeDomain(s.registrableDomain) === normalizeDomain(domain)
+  );
+  const label = geminiByKey[name?.key]?.realService || name?.displayName || domain;
+  // Asked, not assumed. We cannot see a withdrawal happen — §4 is explicit that only the user marks
+  // this done — so the one thing we can do is make sure they meant to say it.
+  const ok = turningOn
+    ? window.confirm(`${label} 탈퇴를 완료하셨나요?`)
+    : window.confirm(`${label} 탈퇴 완료 표시를 취소할까요?`);
+  if (!ok) return;
   // setStatus re-renders on both the optimistic write and the server's answer.
-  setStatus(domain, field, Boolean(input.checked));
+  setStatus(domain, "withdrawn", turningOn);
 });
 
 tabAll?.addEventListener("click", () => setActiveTab("all"));

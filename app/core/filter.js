@@ -148,6 +148,11 @@ export function normalizeSender(fromHeaderValue, rules = defaultRules) {
 /** Rule-table order is documented in filter.rules.js; this is the order that enforces it. */
 const SUBJECT_FAMILY_ORDER = ["signup", "closure", "auth", "transaction", "notification"];
 
+/** Per sender, for the classifier. A sample answers "what is this", a dump would be a mail copy. */
+const SUBJECT_SAMPLE_MAX = 4;
+/** Even a fully-classified sender contributes this many, so a clean sender still gets named. */
+const SUBJECT_SAMPLE_MIN_ANY = 2;
+
 function normalizeSubject(subject) {
   return String(subject || "")
     .toLowerCase()
@@ -421,6 +426,10 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
         emails: new Set(),
         localParts: new Set(),
         nameCounts: new Map(),
+        // A few subjects, for the classifier only (§3, amended 2026-07-16). Kept because the phrase
+        // table is Korean-literal and misses 23.3% of a real mailbox: "이 발신자가 왜 메일을 보내는가"
+        // is in the subject and nowhere else. Capped hard — this is a sample, not a copy.
+        subjects: [],
         messageCount: 0,
         families: emptyFamilies(),
         scoreBuckets: emptyScoreBuckets(),
@@ -456,6 +465,15 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
     const displayName = normalized.displayName || normalized.email;
     svc.nameCounts.set(displayName, (svc.nameCounts.get(displayName) || 0) + 1);
     svc.messageCount += 1;
+
+    // Sample the subjects the rules could not read. A sender whose every subject the phrase table
+    // already matched needs no help; `unknown` is the 23.3% this exists for, so those go first and
+    // the rest only fill the remainder. Deduped, capped, and never more than a handful either way.
+    if (svc.subjects.length < SUBJECT_SAMPLE_MAX) {
+      const s = String(headers.subject || "").trim().slice(0, 120);
+      const wanted = family === "unknown" || svc.subjects.length < SUBJECT_SAMPLE_MIN_ANY;
+      if (s && wanted && !svc.subjects.includes(s)) svc.subjects.push(s);
+    }
 
     const month = monthFromInternalDate(message.internalDate);
     const bucket = svc.families[family] || (svc.families[family] = { months: [], count: 0 });
@@ -553,6 +571,8 @@ export function createAggregator({ selfEmail, rules = defaultRules } = {}) {
       // Every name, for LLM classify only — the row still prints displayName above. A relay's domain
       // carries several services and only this shows it (§8).
       senderNames: topNames(svc.nameCounts),
+      // Subject sample, for LLM classify only. Never the body, never persisted (§3/§6).
+      subjects: [...svc.subjects],
       // Representative From address for LLM classify only (never the message body).
       primaryEmail: emails[0] || "",
       messageCount: svc.messageCount,

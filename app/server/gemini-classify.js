@@ -59,20 +59,29 @@ async function classifyBatch(apiKey, batch) {
       .filter(Boolean)
       .slice(0, 5);
     const primary = String(s.displayName || "").slice(0, 200);
+    const subjects = (Array.isArray(s.subjects) ? s.subjects : [])
+      .map((t) => String(t || "").slice(0, 120))
+      .filter(Boolean)
+      .slice(0, 4);
     return {
       key: s.key || "",
       displayName: primary,
       names: names.length ? names : primary ? [primary] : [],
+      subjects,
       email: String(s.email || "").slice(0, 200),
     };
   });
 
   const prompt = `You classify email senders for a Korean digital-footprint tool.
-You receive ONLY sender display names + email address. Never invent mail body content.
+You receive sender display names, the address, and a few subject lines. Never invent mail content:
+if the subjects do not say something, it is not known.
 
 "names" lists every display name this address sent under, most frequent first. A relay or payment
 processor sends for many services, so the names are the only evidence of who the mail is really for:
 "Cursor via Stripe" from receipts@stripe.com is Cursor's mail, not Stripe's.
+
+"subjects" is a small sample, biased toward the ones our Korean phrase rules could not read. Use it
+to tell what this sender does — signup/verification vs payment vs ads vs a person writing.
 
 For EACH sender, return:
 - category: exactly one of "가입서비스" | "개인메일" | "기타"
@@ -82,7 +91,10 @@ For EACH sender, return:
 - realService: the real product/brand name if inferable. Read "names" first — "X via Y" means X. If
   the names show SEVERAL different services behind one relay, name the most frequent one and say so
   in reason. If nothing in the names identifies a service, use the brand from the domain, or "".
-- reason: one short Korean sentence explaining the classification
+- reason: one short Korean sentence saying what kind of mail this sender sends and why that means
+  the user does (or does not) have an account there. Say the KIND — 가입/인증, 결제, 광고, 알림 —
+  because that is what the user is deciding on. NEVER quote or paraphrase a subject line: the user
+  can read their own mail, and repeating it back tells them nothing they did not have.
 - email: copy the input email exactly
 - key: copy the input key exactly
 

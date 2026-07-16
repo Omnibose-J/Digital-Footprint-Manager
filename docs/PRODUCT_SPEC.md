@@ -82,7 +82,7 @@ Gmail search through `users.messages.list(q=...)` cannot use the `gmail.metadata
 
 - Google Identity Services in the browser; access token in browser memory only; no refresh token.
 - Call Gmail directly from the browser; request message IDs and only the headers needed for extraction; never fetch bodies or attachments.
-- Never send raw message bodies, subjects, or attachments to the product backend. **Sender display name and address do go**, to `/api/classify-senders` and on to Gemini, and only there (§8). A body never leaves the browser and never will — that is the boundary this product is built on, and it is unchanged.
+- Never send raw message bodies or attachments to the product backend. **Sender display names, the address, and a capped subject sample do go**, to `/api/classify-senders` and on to Gemini, and only there (§8). A body never leaves the browser and never will — that is the boundary this product is built on. Subjects are sampled, never copied: at most four per sender, deduped, weighted toward the ones the phrase rules could not read.
 - Send normalized candidate data only after user review.
 
 ### Scan budget
@@ -295,8 +295,9 @@ Vercel fits only if the Gmail boundary stays in the browser: scan, parsing, and 
 | Data | Retention | Invariant |
 |---|---|---|
 | Gmail access token | Browser memory, current session | Clear on disconnect/tab close; never log or persist |
-| Message subject / date | Scan memory, max 30 minutes | Never transmit to backend |
-| Sender display name + address | Scan memory, max 30 minutes; sent to `/api/classify-senders` → Gemini, never stored | Transmitted for brand naming only (§8). Not persisted anywhere — not our DB, not a log |
+| Message body / attachments | Never fetched at all | Never leaves the browser, never requested |
+| Message date | Scan memory, max 30 minutes | Never transmit to backend |
+| Sender names + address + subject sample | Scan memory, max 30 minutes; sent to `/api/classify-senders` → Gemini, never stored | Transmitted for naming and sender classification only (§8). Subjects capped at four per sender. Not persisted anywhere — not our DB, not a log |
 | Normalized candidates and decisions | While product account exists | Per-item delete and full export |
 | Cleanup labels (사용/미사용) + the score we showed when the user labelled | **Pilot only** — this table is dropped at public release unless §8 says otherwise | The owner reads individual rows, not just aggregates (§8). Keyed on Google `sub`, never on the address |
 | Cleanup status | While product account exists | Dates and method only |
@@ -498,6 +499,25 @@ The marginal disclosure to *Google specifically* is small — the user's mailbox
 **Fences that stay up.** No LLM in scoring. No body or subject to the model, ever. No Gemini in the deletion guide or the catalog's verified routes — a hallucinated withdrawal URL is worse than no URL. The key stays server-side (`GEMINI_API_KEY`, never `NEXT_PUBLIC_`), and no Google host is added to `connect-src`: the browser talks to `/api/*` and nothing else, so the client cannot reach Gemini even by accident.
 
 **Status:** Active. Supersedes "Do not introduce an LLM into discovery" (§5), and only that clause — the sentence after it, "start with deterministic signals, the entity catalog, and user confirmation", is what actually happened and still holds.
+
+> **Amended 2026-07-16 (subjects).** The classifier now also receives a subject sample, and §3 is
+> amended again the same day. The reason is measured, not assumed: `filter.js` reads subjects with a
+> Korean phrase table and leaves **23.3% of a real 811-message mailbox as `unknown`** (findings.md),
+> and an unclassified sender is one the product cannot say anything about. Checked against the live
+> API before shipping: 무신사 with newsletter subjects resolves to `기타`, 당근 with 가입/재설정
+> subjects to `가입서비스` — the split the phrase table was missing.
+>
+> **The honest sentence is now the narrowest it has been.** Not "메일이 서버로 가지 않습니다": what
+> holds is that **the body never leaves the browser and is never even fetched**. Sender names, the
+> address, and up to four subjects per sender do leave, and go to Google. A subject is content — it
+> carries names, order numbers, amounts — and this is the second time in one day the §3 boundary has
+> opened. Whoever reads this next should know both facts arrived together and that neither was an
+> accident.
+>
+> **Sampled, not copied,** and the cap is the boundary now: ≤4 per sender, deduped, biased to
+> `unknown`. A dump would be a mail copy with extra steps. The rest of the fences hold unchanged —
+> the LLM still only names and classifies senders, `discoveryScore` is still computed from the rules
+> alone, and nothing here is persisted (§6).
 
 ### Prior decisions (2026-07-15, all Active; full text in v1 archive)
 

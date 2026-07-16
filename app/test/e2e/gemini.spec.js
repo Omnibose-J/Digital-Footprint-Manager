@@ -70,9 +70,30 @@ test.describe("Gemini names the sender", () => {
     expect(stripe, "stripe.com should reach the classifier").toBeTruthy();
     expect(stripe.names).toContain("Cursor via Stripe");
     expect(stripe.names).toContain("Notion via Stripe");
-    // Still the address, still no subject: §3's boundary did not move to make this work.
     expect(stripe.email).toBe("receipts@stripe.com");
-    expect(JSON.stringify(req.postDataJSON())).not.toContain("결제가 완료되었습니다");
+  });
+
+  test("it gets a subject sample, and only a sample", async ({ page }) => {
+    // §3 amended 2026-07-16: subjects go. What must not go is a copy of the mailbox — the cap is the
+    // boundary now, so it is the thing worth asserting. Bodies never move and are not sampled at all.
+    await installFakeGoogle(page, { account: SELF, messages: mailbox(), classify: CURSOR });
+    await page.goto("/");
+
+    const [req] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes("/api/classify-senders") && r.method() === "POST"),
+      runScan(page),
+    ]);
+
+    const body = req.postDataJSON();
+    const stripe = body.senders.find((s) => s.email.includes("stripe.com"));
+    expect(stripe.subjects.length).toBeGreaterThan(0);
+    expect(stripe.subjects.length).toBeLessThanOrEqual(4);
+    // Deduped: this mailbox sends "결제가 완료되었습니다" twice and it must not be sampled twice.
+    expect(new Set(stripe.subjects).size).toBe(stripe.subjects.length);
+    // Nothing but the four declared fields — no body, no message id, no date.
+    for (const s of body.senders) {
+      expect(Object.keys(s).sort()).toEqual(["displayName", "email", "key", "names", "subjects"]);
+    }
   });
 
   test("renames a row whose domain belongs to someone else's mail estate", async ({ page }) => {
