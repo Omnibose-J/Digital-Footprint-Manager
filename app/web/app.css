@@ -607,6 +607,19 @@ table {
   border-bottom: 1px solid var(--rule);
 }
 
+/* Secondary to 탈퇴 on purpose: 탈퇴 is the tap the screen exists for, and this is the follow-up
+   once they are out. A quiet underlined link, not a second competing button. */
+.mail-link {
+  display: inline-block;
+  font-size: var(--text-sm);
+  color: var(--ink-quiet);
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.mail-link:hover {
+  color: var(--ink);
+}
+
 .done-check {
   display: inline-flex;
   align-items: center;
@@ -1252,6 +1265,12 @@ tr.row-closed td {
   /* Full width and a real height: this is the tap the whole screen exists for. */
   .table-unused .cell-action .btn-row {
     width: 100%;
+    min-height: 44px;
+  }
+  /* A tappable target on a phone without pretending to be the primary button. */
+  .table-unused .cell-mail .mail-link {
+    display: inline-flex;
+    align-items: center;
     min-height: 44px;
   }
 }

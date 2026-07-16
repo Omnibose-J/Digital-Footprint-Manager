@@ -318,6 +318,36 @@ test.describe("the scan a user actually sees", () => {
     expect(JSON.stringify(clicks)).not.toContain("spotify");
   });
 
+  test("each 미사용 row links to the scanned mailbox by address, and the click never carries it", async ({ page }) => {
+    await runScan(page);
+    const row = await markUnusedAndOpenTab(page, "spotify.com");
+
+    const mail = row.locator('a[data-out="mail"]');
+    const href = await mail.getAttribute("href");
+    // The account the scan actually read (users/me/profile → SELF), addressed as an email. u/0 is
+    // positional and opens whichever account the browser has first, so a multi-account user would
+    // clean the wrong inbox — §8 asked for exactly this to be true before it shipped.
+    expect(href).toContain(`mail/u/${encodeURIComponent(SELF)}/`);
+    expect(href).not.toContain("/u/0/");
+    expect(href).toContain(encodeURIComponent("from:spotify.com"));
+
+    // The href carries the account; the analytics event must not. track() is only ever handed
+    // data-out, never the URL, and the value allowlist has "mail" — prove both, since the whole
+    // product is the claim that no mailbox identifier leaves the browser.
+    const [popup] = await Promise.all([page.waitForEvent("popup"), mail.click()]);
+    await popup.close();
+    const clicks = await page.evaluate(() =>
+      (window.dataLayer || [])
+        .map((a) => Array.from(a))
+        .filter((a) => a[0] === "event" && a[1] === "outbound_click")
+        .map((a) => a[2])
+    );
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0].link).toBe("mail");
+    expect(JSON.stringify(clicks)).not.toContain(SELF);
+    expect(JSON.stringify(clicks)).not.toContain("gmail.com");
+  });
+
   test("mapped and unmapped rows both get a cancel link with the right label", async ({ page }) => {
     await runScan(page);
     // Both labelled first, then one tab switch: the withdrawal link is a 미사용-tab thing now.

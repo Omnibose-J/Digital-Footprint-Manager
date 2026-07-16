@@ -2,7 +2,7 @@
 import { collectSenders, scanFraction } from "/core/scan.js";
 import { createAggregator } from "/core/filter.js";
 import { loadCatalog, upgradeSnapshot, isStale } from "/core/catalog.js";
-import { renderGuideHtml, renderRequestTemplate, maskAccount } from "/core/guide.js";
+import { renderGuideHtml, renderRequestTemplate, maskAccount, gmailSearchUrl } from "/core/guide.js";
 import { applyUserVerdict, sortBuckets } from "/core/verdict.js";
 import { escapeHtml } from "/core/html.js";
 import { initAnalytics, track } from "/core/analytics.js";
@@ -400,6 +400,20 @@ function deletionCell(s) {
   )}" data-domain="${escapeHtml(domain)}" target="_blank" rel="noopener noreferrer">${escapeHtml(action.label)}</a>`;
 }
 
+/**
+ * 미사용 탭 only. The step after 탈퇴: the account is gone, its mail is not, and we hold no scope to
+ * delete it (§8 — the narrowest scope that trashes one message also grants send-as-the-user, and no
+ * trash-only scope exists). So this routes to Gmail's own search, in the mailbox we actually scanned
+ * and addressed by email — u/0 is positional and a multi-account user would land in the wrong inbox.
+ * gmailSearchUrl returns null when it cannot aim the link (no account, no real domain); then there
+ * is nothing safe to offer and the cell says so rather than shipping a broken u// link.
+ */
+function mailCell(s) {
+  const url = gmailSearchUrl(scannedAccount, s.registrableDomain);
+  if (!url) return `<span class="cell-none">—</span>`;
+  return `<a class="mail-link" href="${escapeHtml(url)}" data-out="mail" target="_blank" rel="noopener noreferrer">메일 정리</a>`;
+}
+
 function unusedRowHtml(s, i) {
   const domain = normalizeDomain(s.registrableDomain);
   const d = escapeHtml(domain);
@@ -415,6 +429,7 @@ function unusedRowHtml(s, i) {
       <td class="cell-domain">${escapeHtml(domain)}</td>
       <td class="cell-month" data-label="마지막 흔적">${escapeHtml(s.lastSeenMonth || "—")}</td>
       <td class="cell-action">${deletionCell(s)}</td>
+      <td class="cell-mail" data-label="메일 정리">${mailCell(s)}</td>
       <td class="cell-done" data-label="완료">${doneCell}</td>`;
 }
 
