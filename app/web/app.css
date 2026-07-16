@@ -533,9 +533,6 @@ table {
 .w-service {
   width: 22%;
 }
-.w-domain {
-  width: 14%;
-}
 /* auto, not a percentage, and it is the only auto column on purpose.
 
    The others declare 22% + 14% and 44+96+68+150px. At 800px those pixels are already 45% of the
@@ -725,10 +722,9 @@ tr.row-mark-delete:hover td {
   line-height: 1.35;
 }
 
-.table-services .cell-domain {
-  overflow-wrap: normal;
-  word-break: normal;
-}
+/* The 후보 list has no 도메인 column: the 서비스 cell already printed the domain under the name, so
+   the column was the same string twice, holding 14% of a table that had none to spare. The 미사용 tab
+   and the excluded list still have one — .cell-domain below is theirs. */
 
 th,
 td {
@@ -1218,10 +1214,6 @@ tr.row-closed td {
   }
   .table-services .cell-service .service-domain {
     white-space: nowrap;
-  }
-  .table-services .cell-domain {
-    opacity: 0.6;
-    padding-bottom: var(--s3);
   }
   /* Label the numbers, since the header row that explained them is gone. */
   .table-services td[data-label] {

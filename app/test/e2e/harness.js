@@ -191,21 +191,24 @@ export async function readTable(page) {
       progress: document.getElementById("progress").textContent,
       meta: document.getElementById("meta").textContent,
       err: document.getElementById("err").textContent,
-      // # / 서비스 / 도메인 / 비고 / 마지막 흔적 / 건수 / 내 선택
+      // # / 서비스 / 비고 / 마지막 흔적 / 건수 / 내 선택
       //
       // No 탈퇴 column: the 후보 list stopped offering a withdrawal for a service the user has not
       // said anything about yet — it lives on the 미사용 tab now.
-      // No 정리 우선도 / 신뢰 either: one 비고 column carries the reasons and neither score is on
-      // screen. The scores still exist and still rank this list; assert order here, not numbers.
+      // No 정리 우선도 / 신뢰: one 비고 column carries the reasons and neither score is on screen.
+      // The scores still exist and still rank this list; assert order here, not numbers.
+      // No 도메인 column either — the 서비스 cell prints the domain under the name, so `domain` below
+      // reads it from there. It was a duplicate holding 14% of a table that had none to spare.
       services: [...document.getElementById("rows").children].map((tr) => {
         const c = cells(tr);
+        const svc = tr.querySelector(".cell-service");
         return {
-          name: c[1],
-          domain: c[2],
-          remark: c[3],
-          month: c[4],
-          count: c[5],
-          choice: c[6],
+          name: svc?.querySelector(".service-name")?.innerText.trim() || c[1],
+          domain: svc?.querySelector(".service-domain")?.innerText.trim() || "",
+          remark: c[2],
+          month: c[3],
+          count: c[4],
+          choice: c[5],
         };
       }),
       excluded: [...document.getElementById("hiddenRows").children].map((tr) => {

@@ -514,7 +514,6 @@ function withCatalog(rawSnapshot) {
 function rowHtml(s, i) {
   return `<td class="cell-rank">${i + 1}</td>
       <td class="cell-service">${serviceCell(s)}</td>
-      <td class="cell-domain">${escapeHtml(s.registrableDomain || "")}</td>
       <td class="cell-remark" data-label="비고">${remarkCell(s)}</td>
       <td class="cell-month" data-label="마지막 흔적">${escapeHtml(s.lastSeenMonth || "—")}</td>
       <td class="col-count" data-label="건수">${s.messageCount}</td>
