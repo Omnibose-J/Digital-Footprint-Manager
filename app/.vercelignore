@@ -1,0 +1,23 @@
+# Vercel serves an uploaded file directly whenever one matches the request path — the
+# `/(.*)` → `/api` rewrite in vercel.json only fires on a filesystem miss. So every file
+# shipped here is also a public URL. Keep local-only files out.
+#
+# Do NOT add server/: api/index.js imports it, so removing it breaks the function.
+# It stays addressable at /server/server.js — see docs/tracking/findings.md.
+#
+# This file replaces .gitignore for upload decisions, so the runtime dirs are repeated here.
+
+node_modules
+.vercel
+sow
+test-results
+playwright-report
+.env
+.env.*
+*.log
+
+# Local-only: the launcher and the test suite never run on Vercel.
+test
+run.mjs
+run.cmd
+playwright.config.js

@@ -1,0 +1,21 @@
+{
+  "name": "dfm-gmail-sender-prototype",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js",
+    "test": "node --test test/*.js",
+    "test:unit": "node --test test/*.js",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "google-auth-library": "^9.15.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
