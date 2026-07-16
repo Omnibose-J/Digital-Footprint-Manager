@@ -61,6 +61,12 @@ const BAND_LABEL = {
   low: "낮음",
 };
 let abortScan = null;
+/**
+ * Which scan the UI currently belongs to. Aborting is not enough: requests already sent land
+ * anyway, and logout is a DOM swap rather than a navigation, so a callback from a scan the user
+ * walked away from would otherwise repaint the table for whoever signed in next.
+ */
+let scanGeneration = 0;
 let gmailAccessToken = null;
 let hiddenOpen = false;
 /** @type {any | null} */
@@ -542,6 +548,7 @@ scanBtn?.addEventListener("click", async () => {
 
   if (abortScan) abortScan.abort();
   abortScan = new AbortController();
+  const myScan = ++scanGeneration;
 
   try {
     gmailAccessToken = await requestGmailToken();
@@ -567,12 +574,17 @@ scanBtn?.addEventListener("click", async () => {
       },
       onMessage: (message) => aggregator.add(message),
       onProgress: (p) => {
+        if (myScan !== scanGeneration) return;
         const snap = aggregator.snapshot();
         renderSnapshot(snap);
         progressEl.textContent = formatProgress(p, snap.stats);
         setProgressBar(scanFraction(p));
       },
     });
+
+    // A scan can still resolve after logout: the listing loop breaks on the last page before it
+    // rechecks the signal, so nothing here is reached only by the abort path.
+    if (myScan !== scanGeneration) return;
 
     const finalSnap = aggregator.snapshot();
     renderSnapshot(finalSnap);
@@ -643,6 +655,8 @@ scanBtn?.addEventListener("click", async () => {
           : "0.0%",
     });
   } catch (e) {
+    // The abandoned scan's own cancellation is not news for whoever is on the page now.
+    if (myScan !== scanGeneration) return;
     err.textContent = String(e.message || e);
   } finally {
     scanBtn.disabled = false;
@@ -651,6 +665,9 @@ scanBtn?.addEventListener("click", async () => {
 
 logoutBtn?.addEventListener("click", async () => {
   track("logged_out", { scanned: Boolean(lastSnapshot) });
+  // Disown the scan here, before the awaits below: the logout round-trip and the token revoke
+  // both take longer than an in-flight Gmail read needs to come back and repaint the table.
+  scanGeneration += 1;
   if (abortScan) abortScan.abort();
   if (gmailAccessToken && window.google?.accounts?.oauth2) {
     try {
