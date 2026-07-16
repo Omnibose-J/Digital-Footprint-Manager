@@ -82,7 +82,7 @@ Gmail search through `users.messages.list(q=...)` cannot use the `gmail.metadata
 
 - Google Identity Services in the browser; access token in browser memory only; no refresh token.
 - Call Gmail directly from the browser; request message IDs and only the headers needed for extraction; never fetch bodies or attachments.
-- Never send raw message bodies, subjects, or full sender addresses to the product backend.
+- Never send raw message bodies, subjects, or attachments to the product backend. **Sender display name and address do go**, to `/api/classify-senders` and on to Gemini, and only there (§8). A body never leaves the browser and never will — that is the boundary this product is built on, and it is unchanged.
 - Send normalized candidate data only after user review.
 
 ### Scan budget
@@ -286,14 +286,17 @@ Vercel fits only if the Gmail boundary stays in the browser: scan, parsing, and 
 | Authorization | Every Server Action and Route Handler rechecks user ownership | Cross-user candidate IDs return 403/404 |
 | Logs | No tokens or sensitive candidate data in URL query strings; structured redaction | Token, email, subject, and sender scan returns zero matches |
 
-Do not introduce an LLM into discovery. Start with deterministic signals, the entity catalog, and user confirmation.
+**An LLM names services; it never scores them.** Discovery — does this account exist, how confident are we — stays deterministic: the signal families, the per-family caps, the authenticity gate, the catalog. Gemini is allowed exactly one job, on exactly one input: given a sender's display name and address, say which brand that sender actually is. It cannot move `discoveryScore`, cannot add or drop a candidate, and cannot see a subject or a body (§8).
+
+> **Amended 2026-07-16.** This read "Do not introduce an LLM into discovery. Start with deterministic signals, the entity catalog, and user confirmation." The first sentence is now false and the rest still governs — the ordering held: rules and the catalog shipped first, and the LLM was added where they were measured to fail rather than in place of them (§8).
 
 ## 6. Privacy Invariants
 
 | Data | Retention | Invariant |
 |---|---|---|
 | Gmail access token | Browser memory, current session | Clear on disconnect/tab close; never log or persist |
-| Message subject/sender/date | Scan memory, max 30 minutes | Never transmit to backend |
+| Message subject / date | Scan memory, max 30 minutes | Never transmit to backend |
+| Sender display name + address | Scan memory, max 30 minutes; sent to `/api/classify-senders` → Gemini, never stored | Transmitted for brand naming only (§8). Not persisted anywhere — not our DB, not a log |
 | Normalized candidates and decisions | While product account exists | Per-item delete and full export |
 | Cleanup labels (사용/미사용) + the score we showed when the user labelled | **Pilot only** — this table is dropped at public release unless §8 says otherwise | The owner reads individual rows, not just aggregates (§8). Keyed on Google `sub`, never on the address |
 | Cleanup status | While product account exists | Dates and method only |
@@ -476,6 +479,25 @@ Its architecture also collides with §5 independently of the credential question
 **Rejected:** aggregate-only (cannot locate the failing rule — see above). Hashing `user_id` (we operate the identity provider that issues it; a hash obscures the value from a reader and from nobody else, and buys the pilot no ability it lacks). Keeping it in `localStorage` (the storage decision above, unchanged: Safari evicts on a 7-day no-interaction timer, and a device switch is total loss — losing labels silently is worse than not having them, because the list returns looking complete). Cross-user learning — "many users call X in-use, so suppress X's dormancy for everyone" (a pilot's sample cannot carry it, and it converts a per-user correction into a global rule with no one to check it; revisit only with a measured error corpus, which is what this table is for).
 
 **Status:** Active — **pilot only.** Not a standing capability. Revisit at the earlier of the two exits above.
+
+### Decision: Gemini names the sender; the rules still decide everything else - 2026-07-16
+
+**Context:** the rules read a sender's domain and call that the service. Measured against a real mailbox, that is wrong often enough to matter: **Cursor's mail arrives from `stripe.com`, so the product listed a payment processor and hid the account the user actually has.** The domain is the sender's mail estate, not the brand — and no rule fixes that, because the fact needed is "who is `stripe.com` sending on behalf of", which is knowledge about the world rather than a pattern in the header. The catalog answers it for 46 services. The long tail is the rest of the internet.
+
+**What Gemini gets, and what it does not.** Display name and sender address, batched, server-side. Not a subject. Not a body. Not a message id. Its answer is a brand name and a category, and it is applied to *labelling* — which service is this row about — never to `discoveryScore`, never to whether a candidate exists at all. Every scoring rule in §3 is untouched and still deterministic; a Gemini outage or a missing key degrades to exactly today's rules-only behaviour, which is why `/api/classify-senders` is allowed to fail soft.
+
+**What it costs, stated plainly:** the sender address now leaves the browser. §3's processing boundary is amended, not reinterpreted, and the honest sentence is narrower than the one this product used to say: **the mailbox is not sent to our server — a body never leaves the browser and never will — but the addresses that mail came from do, and then go to Google.** Anyone who reads "메일이 서버로 가지 않습니다" as "you learn nothing about who mails me" is now owed a correction, and the §6 copy has to carry it.
+
+The marginal disclosure to *Google specifically* is small — the user's mailbox is Gmail, so Google already holds every message these addresses came from. That is a fact about our current provider mix and not a principle: the moment a non-Gmail mailbox arrives (§8's Naver deferral), this stops being a small step and becomes sending one provider's mail metadata to another. Re-decide it then rather than inheriting it.
+
+**Why not the alternatives.**
+- **Browser-side Gemini.** Keeps §3 whole and was the first instinct. It puts an API key in the client bundle, which is not a key any more; there is no origin restriction that survives someone reading the JS. Rejected on the same grounds as the vault-import decision: the mechanism, not the intention, is what leaks.
+- **Grow the catalog.** Works, and is already how the top services are handled — it does not scale to the long tail, and the long tail is exactly where discovery fails silently. 46 hand-verified entries took a day.
+- **Sender-class in the catalog** (the salvageable kernel from the marketing-template decision). Marks `mailer.` subdomains as campaign senders. Real, and orthogonal: it says what *kind* of mail a domain sends, not who it sends for. `stripe.com` is transactional either way.
+
+**Fences that stay up.** No LLM in scoring. No body or subject to the model, ever. No Gemini in the deletion guide or the catalog's verified routes — a hallucinated withdrawal URL is worse than no URL. The key stays server-side (`GEMINI_API_KEY`, never `NEXT_PUBLIC_`), and no Google host is added to `connect-src`: the browser talks to `/api/*` and nothing else, so the client cannot reach Gemini even by accident.
+
+**Status:** Active. Supersedes "Do not introduce an LLM into discovery" (§5), and only that clause — the sentence after it, "start with deterministic signals, the entity catalog, and user confirmation", is what actually happened and still holds.
 
 ### Prior decisions (2026-07-15, all Active; full text in v1 archive)
 

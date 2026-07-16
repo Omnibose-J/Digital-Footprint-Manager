@@ -4,34 +4,25 @@ Problems found while doing other work, verified, and deliberately not fixed ther
 says why it could not be solved at the time and what it costs to leave. Delete an entry when it
 is fixed, not when it is noticed.
 
-## The Gemini classifier is wired to a route the spec forbids reaching (2026-07-16, dead today, deliberate)
+## /api/classify-senders has no session check (2026-07-16, live now)
 
-`server/gemini-classify.js` and `POST /api/classify-senders` arrived with the UI merge. Nothing calls
-them: `web/app.js` has no reference, the only caller is the e2e harness, and `loadGeminiApiKey()`
-reads `src/lib/config.ts` — a path that resolves above this repo's root and does not exist — so the
-route answers 503 before it can do anything. It is kept on purpose: the owner intends to connect it
-from a different surface later.
+The spec question this entry opened is **settled** — §5 was amended and §8 records why, so the route
+crossing sender addresses to Gemini is now the decided design, not a violation. What did not get
+decided is who may call it.
 
-**Connecting it as written contradicts two spec clauses, and neither is a detail.** §3: "Never send
-raw message bodies, subjects, or **full sender addresses** to the product backend" — the route's
-payload is display name plus full sender address, which is the named example. §5: "**Do not
-introduce an LLM into discovery.** Start with deterministic signals, the entity catalog, and user
-confirmation." The prompt is careful (headers only, never invents body content) and that is not the
-objection: the objection is that the address crosses to the server at all, and then to Google, which
-is the boundary the whole privacy claim rests on (§8 benchmark: every dead rival processed
-server-side).
+`/api/classify-senders` checks same-origin and **nothing else**. Every other route that touches user
+data resolves a session first; this one accepts 500 senders per POST from any visitor to the page,
+signed in or not. Same-origin stops another site from calling it in a browser; it stops nothing else,
+and it is the only thing standing between an anonymous request and our Gemini quota.
 
-**Not resolved here** because the fix is a decision, not a line. Two branches, both real: run the
-classification **in the browser** against Gemini directly, which keeps the §3 boundary intact and
-makes the scope question moot but puts an API key in a client bundle; or accept the server hop and
-amend §3/§5 the way §6 was just amended for `domain` — with the cost written down rather than left
-in a comment.
+It was harmless while `loadGeminiApiKey()` read a path that does not exist and the route 503'd on
+every call. **That is no longer true: the key now resolves from `.env` and the route is live.**
 
-**Blast radius today: none, and that is exactly why it is written here rather than fixed.** The
-route 503s, so this is a fact about the missing key, not about the code. The moment a key appears at
-that path, `/api/classify-senders` is a live Gemini proxy that checks same-origin and **nothing
-else** — no session check, unlike `/api/me` — accepting 500 senders per POST from any logged-out
-visitor to the page.
+**Blast radius:** a Gemini proxy anyone can drive from a page they did not sign into. The cost is
+quota and money rather than user data — the caller supplies the addresses, so nobody can read a
+mailbox through it — which is why this is an entry and not a stop-work. **The fix is one line**
+(`const session = await getSession(req); if (!session) return 401`), and the reason it is not written
+yet is that it wants the same test the other routes have, not a guess.
 
 ## gmail.readonly is broader than what the code currently does (2026-07-16, needs a decision)
 
